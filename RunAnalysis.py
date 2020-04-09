@@ -24,7 +24,7 @@ class RunAnalysis():
     super(RunAnalysis, self).__init__(**kwargs)
     
     # Set output dir
-    self.output_dir = 'test123'
+    self.output_dir = 'test_LBT'
     self.debug_level = 0
     
     # Specify model:
@@ -37,23 +37,21 @@ class RunAnalysis():
     # Emulator parameters
     self.retrain_emulator = True
     self.n_pc = 3
-    self.n_restarts = 50
+    self.n_restarts = 100
     
     # MCMC parameters
-    self.rerun_mcmc = False
+    self.rerun_mcmc = True
     self.n_walkers = 500
-    self.n_burn_steps = 2000
-    self.n_steps = 3000
+    self.n_burn_steps = 1000
+    self.n_steps = 1000
     
     # Holdout test options
     self.do_holdout_tests = True
-    self.n_max_holdout_tests = 2
-    if self.n_max_holdout_tests < 0:
-      self.n_max_holdout_tests = sys.maxint
-    
-    # Closure test options
     self.do_closure_tests = True
-    self.n_max_closure_tests = 3
+    self.n_max_holdout_tests = -1
+    
+    if self.n_max_holdout_tests < 0:
+      self.n_max_holdout_tests = sys.maxsize
     
     # Set model parameter ranges
     # For Matter or LBT: (A, B, C, D)
@@ -99,6 +97,7 @@ class RunAnalysis():
         if i  > self.n_max_holdout_tests - 1:
           break
       
+        # Re-initialize data structures, with the updated holdout information
         print('Running holdout test {} / {}'.format(i, n_design_points))
         self.init(exclude_index = i)
         print('    {}'.format(self.AllData['holdout_design']))
@@ -108,15 +107,27 @@ class RunAnalysis():
 
         self.retrain_emulator = True
         output_dir = os.path.join(self.output_dir, 'holdout/{}'.format(i))
-        self.run_single_analysis(output_dir = output_dir, do_emulator_only = True)
+        
+        # If closure test is enabled, perform the MCMC sampling
+        if self.do_closure_tests:
+          self.rerun_mcmc = True
+          self.run_single_analysis(output_dir = output_dir, holdout_test = True, closure_test = True)
+        else:
+          self.run_single_analysis(output_dir = output_dir, holdout_test = True)
+          
+        plt.close('all')
        
+      # Plot summary of holdout tests
       self.plot_dir = os.path.join(self.output_dir, 'holdout')
       self.plot_avg_residuals()
+      
+      # Plot summary of closure tests
+      # ...
 
   #---------------------------------------------------------------
   # Run analysis
   #---------------------------------------------------------------
-  def run_single_analysis(self, output_dir = '.', do_emulator_only = False):
+  def run_single_analysis(self, output_dir = '.', holdout_test = False, closure_test = False):
   
     # Create output dir
     self.plot_dir = os.path.join(output_dir, 'plots')
@@ -139,13 +150,14 @@ class RunAnalysis():
     self.EmulatorPbPb5020 = emulator.Emulator.from_cache('PbPb5020')
     
     # Construct plots characterizing the emulator
-    self.plot_design()
+    self.plot_design(holdout_test = holdout_test)
     self.plot_RAA(self.AllData["design"], 'Design')
     #self.plot_PC_residuals()
     
-    if do_emulator_only:
-      self.plot_emulator_RAA_residuals(do_holdout_only = True)
-      return
+    if holdout_test:
+      self.plot_emulator_RAA_residuals(holdout_test = True)
+      if not closure_test:
+        return
     else:
       self.plot_emulator_RAA_residuals()
     
@@ -171,8 +183,9 @@ class RunAnalysis():
       self.TransformedSamples = np.copy(self.MCMCSamples)
     
     # Plot posterior distributions of parameters
-    self.plot_correlation(suffix = '')
-    self.plot_correlation(suffix = '_Transformed')
+    self.plot_correlation(suffix = '', holdout_test = holdout_test)
+    if self.model in  ['ML1', 'ML2']:
+      self.plot_correlation(suffix = '_Transformed', holdout_test = holdout_test)
     
     # Plot RAA for samples of the posterior parameter space
     sample_points = self.MCMCSamples[ np.random.choice(range(len(self.MCMCSamples)), 100), :]
@@ -183,7 +196,7 @@ class RunAnalysis():
   #---------------------------------------------------------------
   # Plot design points
   #---------------------------------------------------------------
-  def plot_design(self):
+  def plot_design(self, holdout_test = False):
       
     # Tranform {A+C, A/(A+C), B, D, Q}  to {A,B,C,D,Q}
     design_points = self.AllData['design']
@@ -211,6 +224,10 @@ class RunAnalysis():
                 ax.set_ylabel(self.Names[i])
                 ax.set_xlim(*self.Ranges[:,j])
                 ax.set_ylim(*self.Ranges[:,i])
+                
+                if holdout_test:
+                  ax.plot(self.AllData['holdout_design'][j], self.AllData['holdout_design'][i], 'ro')
+
             if i<j:
                 ax.axis('off')
     plt.tight_layout(True)
@@ -254,10 +271,10 @@ class RunAnalysis():
   #---------------------------------------------------------------
   # Plot residuals of RAA between the emulator and the true model values, at the design points
   #---------------------------------------------------------------
-  def plot_emulator_RAA_residuals(self, do_holdout_only = False):
+  def plot_emulator_RAA_residuals(self, holdout_test = False):
 
     # Get training points
-    if do_holdout_only:
+    if holdout_test:
       Examples = [self.AllData["holdout_design"]]
     else:
       Examples = self.AllData["design"]
@@ -268,7 +285,6 @@ class RunAnalysis():
                      "PbPb5020": self.EmulatorPbPb5020.predict(Examples)}
 
     SystemCount = len(self.AllData["systems"])
-
     figure, axes = plt.subplots(figsize = (15, 5 * SystemCount), ncols = 2, nrows = SystemCount)
 
     # Loop through system and centrality range
@@ -285,7 +301,7 @@ class RunAnalysis():
             S2 = self.AllData["observables"][0][1][s2]
 
             # Get MC values at training points
-            if do_holdout_only:
+            if holdout_test:
               model_x = self.AllData['holdout_model'][S1][O][S2]['x'] # pt-bin values
               model_y = self.AllData['holdout_model'][S1][O][S2]['Y'] # 2d array of model Y-values at each training point
             else:
@@ -308,7 +324,7 @@ class RunAnalysis():
     plt.tight_layout(True)
     figure.savefig('{}/RAA_Residuals_Design.pdf'.format(self.plot_dir), dpi = 192)
     
-    if do_holdout_only:
+    if holdout_test:
       self.avg_residuals.append(sum_chi2/n)
 
   #---------------------------------------------------------------
@@ -383,7 +399,7 @@ class RunAnalysis():
   # Plot posterior parameter distributions, either in  transformed
   # or non-transformed coordinates
   #---------------------------------------------------------------
-  def plot_correlation(self, suffix = ''):
+  def plot_correlation(self, suffix = '', holdout_test = False):
 
     if 'Transformed' in suffix:
       Names = self.Names
@@ -413,6 +429,10 @@ class RunAnalysis():
                 ax.set_ylabel(Names[i])
                 ax.set_xlim(*self.Ranges[:,j])
                 ax.set_ylim(*self.Ranges[:,i])
+                
+                if holdout_test:
+                  ax.plot(self.AllData['holdout_design'][j], self.AllData['holdout_design'][i], 'ro')
+
             if i<j:
                 ax.axis('off')
     plt.tight_layout(True)
@@ -590,7 +610,15 @@ class RunAnalysis():
     self.RawPrediction4['Prediction'] = np.delete(self.RawPrediction4['Prediction'], exclude_index, axis=0)
     self.RawPrediction5['Prediction'] = np.delete(self.RawPrediction5['Prediction'], exclude_index, axis=0)
     self.RawPrediction6['Prediction'] = np.delete(self.RawPrediction6['Prediction'], exclude_index, axis=0)
-
+    
+    # If closure test is enabled, set the data to be equal to the held-out point
+    if self.do_closure_tests:
+      self.RawData1["Data"]["y"] = HoldoutPrediction1
+      self.RawData2["Data"]["y"] = HoldoutPrediction2
+      self.RawData3["Data"]["y"] = HoldoutPrediction3
+      self.RawData4["Data"]["y"] = HoldoutPrediction4
+      self.RawData5["Data"]["y"] = HoldoutPrediction5
+      self.RawData6["Data"]["y"] = HoldoutPrediction6
 
   #---------------------------------------------------------------
   # Initialize data
