@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import os
+import sys
 import pickle
 
 import src.reader as Reader
@@ -19,10 +20,11 @@ class RunAnalysis():
   #---------------------------------------------------------------
   # Constructor
   #---------------------------------------------------------------
-  def __init__(self, config_file='', **kwargs):
+  def __init__(self, **kwargs):
     super(RunAnalysis, self).__init__(**kwargs)
     
-    self.config_file = config_file
+    # Set output dir
+    self.output_dir = 'test123'
     self.debug_level = 0
     
     # Specify model:
@@ -53,19 +55,55 @@ class RunAnalysis():
     self.n_burn_steps = 2000
     self.n_steps = 3000
     
-    # Initialize data and model from files
-    self.init_files()
-    self.init_model()
-    if not os.path.exists('plots'):
-      os.makedirs('plots')
+    # Holdout test options
+    self.do_holdout_tests = True
+    self.n_max_holdout_tests = 3
+    
+    # Closure test options
+    self.do_closure_tests = True
+    self.n_max_closure_tests = 3
 
-    if self.debug_level > 0:
-      print(self)
+    print(self)
   
   #---------------------------------------------------------------
   # Run analysis
   #---------------------------------------------------------------
   def run_analysis(self):
+  
+    # Initialize data and model from files, and Run the analysis with all training points
+    self.init()
+    output_dir = os.path.join(self.output_dir, 'main')
+    self.run_single_analysis(output_dir = output_dir)
+    
+    # Hold out one point from the emulator training, and re-train
+    if self.do_holdout_tests:
+    
+      n_design_points = len(self.AllData['design'])
+      for i in range(0, n_design_points):
+      
+        if i  > self.n_max_holdout_tests:
+          break
+      
+        print('Running holdout test {} / {}'.format(i, n_design_points))
+        self.init(exclude_index = i)
+        print('    {}'.format(self.AllData['holdout_design']))
+        if len(self.AllData['design']) != n_design_points - 1:
+          sys.exit('Only {} design points remain, but there should be {}!'.format(
+                    len(self.AllData['design']), n_design_points - 1))
+
+        self.retrain_emulator = True
+        output_dir = os.path.join(self.output_dir, 'holdout/{}'.format(i))
+        self.run_single_analysis(output_dir = output_dir, do_emulator_only = True)
+  
+  #---------------------------------------------------------------
+  # Run analysis
+  #---------------------------------------------------------------
+  def run_single_analysis(self, output_dir = '.', do_emulator_only = False):
+  
+    # Create output dir
+    self.plot_dir = os.path.join(output_dir, 'plots')
+    if not os.path.exists(self.plot_dir):
+      os.makedirs(self.plot_dir)
       
     # Re-train emulator, if requested
     if self.retrain_emulator:
@@ -85,8 +123,13 @@ class RunAnalysis():
     # Construct plots characterizing the emulator
     self.plot_design()
     self.plot_RAA(self.AllData["design"], 'Design')
-    self.plot_emulator_RAA_residuals()
     #self.plot_PC_residuals()
+    
+    if do_emulator_only:
+      self.plot_emulator_RAA_residuals(do_holdout_only = True)
+      return
+    else:
+      self.plot_emulator_RAA_residuals()
     
     # Run MCMC
     if self.rerun_mcmc:
@@ -122,13 +165,12 @@ class RunAnalysis():
   def plot_design(self):
   
     # Get Design object (the same for all systems)
-    design = Design(self.AllData['systems'][0])
+    design_points = self.AllData['design']
     
     # Tranform {A+C, A/(A+C), B, D, Q}  to {A,B,C,D,Q}
     Names = ['A', 'C', 'B', 'D', 'Q']
     Ranges = np.array([[0., 0., 0., 0., 1.], [1.5, 1.5, 20., 20., 4.]])
     
-    design_points = design.array
     transformed_design_points = np.copy(design_points)
     transformed_design_points[:,0] = design_points[:,0] * design_points[:,1]
     transformed_design_points[:,1] = design_points[:,0] - design_points[:,0] * design_points[:,1]
@@ -156,7 +198,7 @@ class RunAnalysis():
             if i<j:
                 ax.axis('off')
     plt.tight_layout(True)
-    plt.savefig('plots/DesignPoints.pdf', dpi = 192)
+    plt.savefig('{}/DesignPoints.pdf'.format(self.plot_dir), dpi = 192)
     
   #---------------------------------------------------------------
   # Plot RAA of the model at a set of points in the parameter space
@@ -191,15 +233,18 @@ class RunAnalysis():
             axes[s1][s2].errorbar(DX, DY, yerr = DE, fmt='ro', label="Measurements")
 
     plt.tight_layout(True)
-    figure.savefig('plots/RAA_{}.pdf'.format(name), dpi = 192)
+    figure.savefig('{}/RAA_{}.pdf'.format(self.plot_dir, name), dpi = 192)
 
   #---------------------------------------------------------------
   # Plot residuals of RAA between the emulator and the true model values, at the design points
   #---------------------------------------------------------------
-  def plot_emulator_RAA_residuals(self):
+  def plot_emulator_RAA_residuals(self, do_holdout_only = False):
 
     # Get training points
-    Examples = self.AllData["design"]
+    if do_holdout_only:
+      Examples = [self.AllData["holdout_design"]]
+    else:
+      Examples = self.AllData["design"]
 
     # Get emulator predictions at training points
     TempPrediction = {"AuAu200": self.EmulatorAuAu200.predict(Examples),
@@ -222,8 +267,12 @@ class RunAnalysis():
             S2 = self.AllData["observables"][0][1][s2]
 
             # Get MC values at training points
-            model_x = self.AllData['model'][S1][O][S2]['x'] # pt-bin values
-            model_y = self.AllData['model'][S1][O][S2]['Y'] # 2d array of model Y-values at each training point
+            if do_holdout_only:
+              model_x = self.AllData['holdout_model'][S1][O][S2]['x'] # pt-bin values
+              model_y = self.AllData['holdout_model'][S1][O][S2]['Y'] # 2d array of model Y-values at each training point
+            else:
+              model_x = self.AllData['model'][S1][O][S2]['x'] # pt-bin values
+              model_y = self.AllData['model'][S1][O][S2]['Y'] # 2d array of model Y-values at each training point
     
             # Get emulator predictions at training points
             emulator_y = TempPrediction[S1][O][S2] # 2d array of emulator Y-values at each training point
@@ -236,7 +285,7 @@ class RunAnalysis():
               axes[s1][s2].plot(model_x, deltaRAA, 'b-', alpha=0.1, label="Posterior" if i==0 else '')
 
     plt.tight_layout(True)
-    figure.savefig('plots/RAA_Residuals_Design.pdf', dpi = 192)
+    figure.savefig('{}/RAA_Residuals_Design.pdf'.format(self.plot_dir), dpi = 192)
 
   #---------------------------------------------------------------
   # Plot residuals of each PC
@@ -285,8 +334,8 @@ class RunAnalysis():
                     ax.fill_between(x, mean - std, mean + std, lw=0, color=color, alpha=.3, zorder=20)
                     
         plt.tight_layout(True)
-        plt.savefig('plots/EmulatorPCs_{}.pdf'.format(system), dpi = 192)
-        plt.savefig('plots/EmulatorPCs_{}.pdf'.format(system), dpi = 192)
+        plt.savefig('{}/EmulatorPCs_{}.pdf'.format(self.plot_dir, system), dpi = 192)
+        plt.savefig('{}/EmulatorPCs_{}.pdf'.format(self.plot_dir, system), dpi = 192)
 
   #---------------------------------------------------------------
   # Check that burn-in is sufficient
@@ -304,7 +353,7 @@ class RunAnalysis():
         for j in range(0, W):
           ax.plot(range(0, S, T), d[j, ::T, i], alpha = A)
       plt.tight_layout(True)
-      plt.savefig('plots/MCMCSamples.pdf', dpi = 192)
+      plt.savefig('{}/MCMCSamples.pdf'.format(self.plot_dir), dpi = 192)
 
   #---------------------------------------------------------------
   # Plot posterior parameter distributions, either in  transformed
@@ -344,13 +393,58 @@ class RunAnalysis():
             if i<j:
                 ax.axis('off')
     plt.tight_layout(True)
-    plt.savefig('plots/Posterior_Correlations{}.pdf'.format(suffix), dpi = 192)
+    plt.savefig('{}/Posterior_Correlations{}.pdf'.format(self.plot_dir, suffix), dpi = 192)
 
   #---------------------------------------------------------------
-  # Initialize data to pickle file
+  # Exclude a holdout point from the design and prediction, and store it
   #---------------------------------------------------------------
-  def init_model(self):
+  def exclude_holdout(self, exclude_index = None):
   
+    # Store the holdout point design and prediction
+    HoldoutDesign = self.RawDesign['Design'][exclude_index]
+    HoldoutPrediction1 = self.RawPrediction1['Prediction'][exclude_index]
+    HoldoutPrediction2 = self.RawPrediction2['Prediction'][exclude_index]
+    HoldoutPrediction3 = self.RawPrediction3['Prediction'][exclude_index]
+    HoldoutPrediction4 = self.RawPrediction4['Prediction'][exclude_index]
+    HoldoutPrediction5 = self.RawPrediction5['Prediction'][exclude_index]
+    HoldoutPrediction6 = self.RawPrediction6['Prediction'][exclude_index]
+    
+    # Model predictions
+    HoldoutPrediction = {"AuAu200": {"R_AA": {"C0": {"Y": HoldoutPrediction1, "x": self.RawData1["Data"]['x']},
+                                       "C1": {"Y": HoldoutPrediction2, "x": self.RawData2["Data"]['x']}}},
+                 "PbPb2760": {"R_AA": {"C0": {"Y": HoldoutPrediction3, "x": self.RawData3["Data"]['x']},
+                                       "C1": {"Y": HoldoutPrediction4, "x": self.RawData4["Data"]['x']}}},
+                 "PbPb5020": {"R_AA": {"C0": {"Y": HoldoutPrediction5, "x": self.RawData5["Data"]['x']},
+                                       "C1": {"Y": HoldoutPrediction6, "x": self.RawData6["Data"]['x']}}}}
+     
+    # Store the holdout point in the dictionary
+    self.AllData['holdout_design'] = HoldoutDesign
+    self.AllData['holdout_model'] = HoldoutPrediction
+    
+    # Remove the holdout point from the design
+    self.RawDesign['Design'] = np.delete(self.RawDesign['Design'], exclude_index, axis = 0)
+  
+    # Remove the holdout point from the prediction
+    self.RawPrediction1['Prediction'] = np.delete(self.RawPrediction1['Prediction'], exclude_index, axis=0)
+    self.RawPrediction2['Prediction'] = np.delete(self.RawPrediction2['Prediction'], exclude_index, axis=0)
+    self.RawPrediction3['Prediction'] = np.delete(self.RawPrediction3['Prediction'], exclude_index, axis=0)
+    self.RawPrediction4['Prediction'] = np.delete(self.RawPrediction4['Prediction'], exclude_index, axis=0)
+    self.RawPrediction5['Prediction'] = np.delete(self.RawPrediction5['Prediction'], exclude_index, axis=0)
+    self.RawPrediction6['Prediction'] = np.delete(self.RawPrediction6['Prediction'], exclude_index, axis=0)
+
+  #---------------------------------------------------------------
+  # Initialize data
+  #---------------------------------------------------------------
+  def init(self, exclude_index = -1):
+  
+    self.init_files()
+    self.init_model(exclude_index)
+
+  #---------------------------------------------------------------
+  # Initialize data to dictionary
+  #---------------------------------------------------------------
+  def init_model(self, exclude_index = -1):
+    
     # Initialize empty dictionary
     self.AllData = {}
 
@@ -360,6 +454,10 @@ class RunAnalysis():
     self.AllData["labels"] = self.RawDesign["Parameter"]
     self.AllData["ranges"] = self.ranges
     self.AllData["observables"] = [('R_AA', ['C0', 'C1'])]
+
+    # If a holdout point is passed, exclude it from the design and prediction
+    if exclude_index >= 0:
+      self.exclude_holdout(exclude_index)
 
     # Data points
     self.Data = {"AuAu200": {"R_AA": {"C0": self.RawData1["Data"], "C1": self.RawData2["Data"]}},
@@ -401,11 +499,11 @@ class RunAnalysis():
     self.AllData["model"] = self.Prediction
     self.AllData["data"] = self.Data
     self.AllData["cov"] = self.Covariance
-
+    
     # Save to the desired pickle file
     with open('input/default.p', 'wb') as handle:
-        pickle.dump(self.AllData, handle, protocol = pickle.HIGHEST_PROTOCOL)
-        
+      pickle.dump(self.AllData, handle, protocol = pickle.HIGHEST_PROTOCOL)
+
     if self.debug_level > 0:
       print(self.AllData["design"].shape)
       print(self.AllData["model"]["AuAu200"]["R_AA"]["C0"]["Y"].shape)
