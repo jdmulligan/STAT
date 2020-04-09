@@ -275,9 +275,9 @@ class RunAnalysis():
 
     # Get training points
     if holdout_test:
-      Examples = [self.AllData["holdout_design"]]
+      Examples = [self.AllData['holdout_design']]
     else:
-      Examples = self.AllData["design"]
+      Examples = self.AllData['design']
 
     # Get emulator predictions at training points
     TempPrediction = {"AuAu200": self.EmulatorAuAu200.predict(Examples),
@@ -303,7 +303,7 @@ class RunAnalysis():
             # Get MC values at training points
             if holdout_test:
               model_x = self.AllData['holdout_model'][S1][O][S2]['x'] # pt-bin values
-              model_y = self.AllData['holdout_model'][S1][O][S2]['Y'] # 2d array of model Y-values at each training point
+              model_y = self.AllData['holdout_model'][S1][O][S2]['Y'] # 1d array of model Y-values at holdout point
             else:
               model_x = self.AllData['model'][S1][O][S2]['x'] # pt-bin values
               model_y = self.AllData['model'][S1][O][S2]['Y'] # 2d array of model Y-values at each training point
@@ -314,7 +314,12 @@ class RunAnalysis():
             # Plot difference between model and emulator
             for i, y in enumerate(TempPrediction[S1][O][S2]):
     
-              deltaRAA = (TempPrediction[S1][O][S2][i] - model_y[i]) / model_y[i]
+              if holdout_test:
+                model_y_1d = model_y
+              else:
+                model_y_1d = model_y[i]
+    
+              deltaRAA = (TempPrediction[S1][O][S2][i] - model_y_1d) / model_y_1d
               for x in np.square(deltaRAA):
                 sum_chi2 += x
                 n += 1
