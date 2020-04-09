@@ -32,10 +32,10 @@ class RunAnalysis():
     #   L: LBT
     #   ML1: Matter+LBT1
     #   ML2: Matter+LBT2
-    self.model = 'ML1'
+    self.model = 'L'
     
     # Emulator parameters
-    self.retrain_emulator = False
+    self.retrain_emulator = True
     self.n_pc = 3
     self.n_restarts = 50
     
@@ -163,9 +163,12 @@ class RunAnalysis():
     self.plot_MCMC_samples()
 
     # Transform coordinates
-    self.TransformedSamples = np.copy(self.MCMCSamples)
-    self.TransformedSamples[:,0] = self.MCMCSamples[:,0] * self.MCMCSamples[:,1]
-    self.TransformedSamples[:,1] = self.MCMCSamples[:,0] - self.MCMCSamples[:,0] * self.MCMCSamples[:,1]
+    if self.model in ['ML1', 'ML2']:
+      self.TransformedSamples = np.copy(self.MCMCSamples)
+      self.TransformedSamples[:,0] = self.MCMCSamples[:,0] * self.MCMCSamples[:,1]
+      self.TransformedSamples[:,1] = self.MCMCSamples[:,0] - self.MCMCSamples[:,0] * self.MCMCSamples[:,1]
+    else:
+      self.TransformedSamples = np.copy(self.MCMCSamples)
     
     # Plot posterior distributions of parameters
     self.plot_correlation(suffix = '')
@@ -184,9 +187,12 @@ class RunAnalysis():
       
     # Tranform {A+C, A/(A+C), B, D, Q}  to {A,B,C,D,Q}
     design_points = self.AllData['design']
-    transformed_design_points = np.copy(design_points)
-    transformed_design_points[:,0] = design_points[:,0] * design_points[:,1]
-    transformed_design_points[:,1] = design_points[:,0] - design_points[:,0] * design_points[:,1]
+    if self.model in ['ML1', 'ML2']:
+      transformed_design_points = np.copy(design_points)
+      transformed_design_points[:,0] = design_points[:,0] * design_points[:,1]
+      transformed_design_points[:,1] = design_points[:,0] - design_points[:,0] * design_points[:,1]
+    else:
+      transformed_design_points = np.copy(design_points)
     
     NDimension = len(self.AllData["labels"])
     figure, axes = plt.subplots(figsize = (3 * NDimension, 3 * NDimension), ncols = NDimension, nrows = NDimension)
@@ -416,9 +422,12 @@ class RunAnalysis():
   def plot_avg_residuals(self):
 
     design_points = self.AllData['design']
-    transformed_design_points = np.copy(design_points)
-    transformed_design_points[:,0] = design_points[:,0] * design_points[:,1]
-    transformed_design_points[:,1] = design_points[:,0] - design_points[:,0] * design_points[:,1]
+    if self.model in ['ML1', 'ML2']:
+      transformed_design_points = np.copy(design_points)
+      transformed_design_points[:,0] = design_points[:,0] * design_points[:,1]
+      transformed_design_points[:,1] = design_points[:,0] - design_points[:,0] * design_points[:,1]
+    else:
+      transformed_design_points = np.copy(design_points)
     
     if len(self.avg_residuals) < len(self.AllData['design']):
       transformed_design_points = transformed_design_points[0:self.n_max_holdout_tests]
