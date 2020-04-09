@@ -34,16 +34,6 @@ class RunAnalysis():
     #   ML2: Matter+LBT2
     self.model = 'ML1'
     
-    # Set model parameter ranges
-    if self.model == 'M':
-      self.ranges = [(0, 1.5), (0, 1.0), (0, 20), (0, 20), (1, 4)]
-    elif self.model == 'L':
-      self.ranges = [(0.01, 2), (0.01, 20), (0.01, 2), (0.01, 20)]
-    elif self.model == 'ML1':
-      self.ranges = [(0, 1.5), (0, 1.0), (0, 20), (0, 20), (1, 4)]
-    elif self.model == 'ML2':
-      self.ranges = [(0, 1.5), (0, 1.0), (0, 20), (1, 4)]
-
     # Emulator parameters
     self.retrain_emulator = False
     self.n_pc = 3
@@ -57,11 +47,33 @@ class RunAnalysis():
     
     # Holdout test options
     self.do_holdout_tests = True
-    self.n_max_holdout_tests = 3
+    self.n_max_holdout_tests = 2
+    if self.n_max_holdout_tests < 0:
+      self.n_max_holdout_tests = sys.maxint
     
     # Closure test options
     self.do_closure_tests = True
     self.n_max_closure_tests = 3
+    
+    # Set model parameter ranges
+    # For Matter or LBT: (A, B, C, D)
+    # For Matter+LBT 1,2: (A, C, B, D, Q), i.e. transformed versions of {A+C, A/(A+C), B, D, Q} from .dat
+    if self.model == 'M':
+      self.ranges = [(0.01, 2), (0.01, 20), (0.01, 2), (0.01, 20)]
+    elif self.model == 'L':
+      self.ranges = [(0.01, 2), (0.01, 20), (0.01, 2), (0.01, 20)]
+    elif self.model == 'ML1':
+      self.ranges = [(0, 1.5), (0, 1.0), (0, 20), (0, 20), (1, 4)]
+    elif self.model == 'ML2':
+      self.ranges = [(0, 1.5), (0, 1.0), (0, 20), (1, 4)]
+    self.Ranges = np.array(self.ranges).T
+      
+    if self.model == 'M' or self.model == 'L':
+      self.Names = [r"$A$", r"$B$", r"$C$", r"$D$"]
+      self.Names_untransformed = self.Names
+    else:
+      self.Names = [r"$A$", r"$C$", r"$B$", r"$D$", r"$Q$"]
+      self.Names_untransformed = [r"$A+C$", r"$A/(A+C)$", r"$B$", r"$D$", r"$Q$"]
 
     print(self)
   
@@ -78,10 +90,13 @@ class RunAnalysis():
     # Hold out one point from the emulator training, and re-train
     if self.do_holdout_tests:
     
+      # Store a list of the chi2 of the holdout residual
+      self.avg_residuals = []
+    
       n_design_points = len(self.AllData['design'])
       for i in range(0, n_design_points):
       
-        if i  > self.n_max_holdout_tests:
+        if i  > self.n_max_holdout_tests - 1:
           break
       
         print('Running holdout test {} / {}'.format(i, n_design_points))
@@ -94,7 +109,10 @@ class RunAnalysis():
         self.retrain_emulator = True
         output_dir = os.path.join(self.output_dir, 'holdout/{}'.format(i))
         self.run_single_analysis(output_dir = output_dir, do_emulator_only = True)
-  
+       
+      self.plot_dir = os.path.join(self.output_dir, 'holdout')
+      self.plot_avg_residuals()
+
   #---------------------------------------------------------------
   # Run analysis
   #---------------------------------------------------------------
@@ -163,20 +181,12 @@ class RunAnalysis():
   # Plot design points
   #---------------------------------------------------------------
   def plot_design(self):
-  
-    # Get Design object (the same for all systems)
-    design_points = self.AllData['design']
-    
+      
     # Tranform {A+C, A/(A+C), B, D, Q}  to {A,B,C,D,Q}
-    Names = ['A', 'C', 'B', 'D', 'Q']
-    Ranges = np.array([[0., 0., 0., 0., 1.], [1.5, 1.5, 20., 20., 4.]])
-    
+    design_points = self.AllData['design']
     transformed_design_points = np.copy(design_points)
     transformed_design_points[:,0] = design_points[:,0] * design_points[:,1]
     transformed_design_points[:,1] = design_points[:,0] - design_points[:,0] * design_points[:,1]
-    transformed_design_points[:,2] = design_points[:,2]
-    transformed_design_points[:,3] = design_points[:,3]
-    transformed_design_points[:,4] = design_points[:,4]
     
     NDimension = len(self.AllData["labels"])
     figure, axes = plt.subplots(figsize = (3 * NDimension, 3 * NDimension), ncols = NDimension, nrows = NDimension)
@@ -184,17 +194,17 @@ class RunAnalysis():
         for j, ax in enumerate(row):
             if i==j:
                 ax.hist(transformed_design_points[:,i], bins=50,
-                        range=Ranges[:,i], histtype='step', color='green')
-                ax.set_xlabel(Names[i])
-                ax.set_xlim(*Ranges[:,j])
+                        range=self.Ranges[:,i], histtype='step', color='green')
+                ax.set_xlabel(self.Names[i])
+                ax.set_xlim(*self.Ranges[:,j])
             if i>j:
                 ax.hist2d(transformed_design_points[:, j], transformed_design_points[:, i],
-                          bins=50, range=[Ranges[:,j], Ranges[:,i]],
+                          bins=50, range=[self.Ranges[:,j], self.Ranges[:,i]],
                           cmap='Greens')
-                ax.set_xlabel(Names[j])
-                ax.set_ylabel(Names[i])
-                ax.set_xlim(*Ranges[:,j])
-                ax.set_ylim(*Ranges[:,i])
+                ax.set_xlabel(self.Names[j])
+                ax.set_ylabel(self.Names[i])
+                ax.set_xlim(*self.Ranges[:,j])
+                ax.set_ylim(*self.Ranges[:,i])
             if i<j:
                 ax.axis('off')
     plt.tight_layout(True)
@@ -256,10 +266,12 @@ class RunAnalysis():
     figure, axes = plt.subplots(figsize = (15, 5 * SystemCount), ncols = 2, nrows = SystemCount)
 
     # Loop through system and centrality range
+    sum_chi2 = 0.
+    n = 0
     for s1 in range(0, SystemCount):  # Collision system
         for s2 in range(0, 2): # Centrality range
             axes[s1][s2].set_xlabel(r"$p_{T}$")
-            axes[s1][s2].set_ylabel(r"$R_{AA}^{emulator} - R_{AA}^{model}$")
+            axes[s1][s2].set_ylabel(r"$(R_{AA}^{emulator} - R_{AA}^{model}) / R_{AA}^{model}$")
     
             # Get keys for given system, centrality
             S1 = self.AllData["systems"][s1]
@@ -280,12 +292,18 @@ class RunAnalysis():
             # Plot difference between model and emulator
             for i, y in enumerate(TempPrediction[S1][O][S2]):
     
-              deltaRAA = TempPrediction[S1][O][S2][i] - model_y[i]
+              deltaRAA = (TempPrediction[S1][O][S2][i] - model_y[i]) / model_y[i]
+              for x in np.square(deltaRAA):
+                sum_chi2 += x
+                n += 1
     
               axes[s1][s2].plot(model_x, deltaRAA, 'b-', alpha=0.1, label="Posterior" if i==0 else '')
 
     plt.tight_layout(True)
     figure.savefig('{}/RAA_Residuals_Design.pdf'.format(self.plot_dir), dpi = 192)
+    
+    if do_holdout_only:
+      self.avg_residuals.append(sum_chi2/n)
 
   #---------------------------------------------------------------
   # Plot residuals of each PC
@@ -362,75 +380,70 @@ class RunAnalysis():
   def plot_correlation(self, suffix = ''):
 
     if 'Transformed' in suffix:
-      Names = [r"$A$", r"$C$", r"$B$", r"$D$", r"$Q$", r"$P_6$"]
+      Names = self.Names
       samples = self.TransformedSamples
       color = 'blue'
       colormap = 'Blues'
     else:
-      Names = self.AllData["labels"]
+      Names = self.Names_untransformed
       samples = self.MCMCSamples
       color = 'green'
       colormap = 'Greens'
-
+      
     NDimension = len(self.AllData["labels"])
-    Ranges = np.array(self.AllData["ranges"]).T
     figure, axes = plt.subplots(figsize = (3 * NDimension, 3 * NDimension), ncols = NDimension, nrows = NDimension)
     for i, row in enumerate(axes):
         for j, ax in enumerate(row):
             if i==j:
                 ax.hist(samples[:,i], bins=50,
-                        range=Ranges[:,i], histtype='step', color='green')
+                        range=self.Ranges[:,i], histtype='step', color=color)
                 ax.set_xlabel(Names[i])
-                ax.set_xlim(*Ranges[:,j])
+                ax.set_xlim(*self.Ranges[:,j])
             if i>j:
                 ax.hist2d(samples[:, j], samples[:, i],
-                          bins=50, range=[Ranges[:,j], Ranges[:,i]],
-                          cmap='Greens')
+                          bins=50, range=[self.Ranges[:,j], self.Ranges[:,i]],
+                          cmap=colormap)
                 ax.set_xlabel(Names[j])
                 ax.set_ylabel(Names[i])
-                ax.set_xlim(*Ranges[:,j])
-                ax.set_ylim(*Ranges[:,i])
+                ax.set_xlim(*self.Ranges[:,j])
+                ax.set_ylim(*self.Ranges[:,i])
             if i<j:
                 ax.axis('off')
     plt.tight_layout(True)
     plt.savefig('{}/Posterior_Correlations{}.pdf'.format(self.plot_dir, suffix), dpi = 192)
 
   #---------------------------------------------------------------
-  # Exclude a holdout point from the design and prediction, and store it
-  #---------------------------------------------------------------
-  def exclude_holdout(self, exclude_index = None):
-  
-    # Store the holdout point design and prediction
-    HoldoutDesign = self.RawDesign['Design'][exclude_index]
-    HoldoutPrediction1 = self.RawPrediction1['Prediction'][exclude_index]
-    HoldoutPrediction2 = self.RawPrediction2['Prediction'][exclude_index]
-    HoldoutPrediction3 = self.RawPrediction3['Prediction'][exclude_index]
-    HoldoutPrediction4 = self.RawPrediction4['Prediction'][exclude_index]
-    HoldoutPrediction5 = self.RawPrediction5['Prediction'][exclude_index]
-    HoldoutPrediction6 = self.RawPrediction6['Prediction'][exclude_index]
+  def plot_avg_residuals(self):
+
+    design_points = self.AllData['design']
+    transformed_design_points = np.copy(design_points)
+    transformed_design_points[:,0] = design_points[:,0] * design_points[:,1]
+    transformed_design_points[:,1] = design_points[:,0] - design_points[:,0] * design_points[:,1]
     
-    # Model predictions
-    HoldoutPrediction = {"AuAu200": {"R_AA": {"C0": {"Y": HoldoutPrediction1, "x": self.RawData1["Data"]['x']},
-                                       "C1": {"Y": HoldoutPrediction2, "x": self.RawData2["Data"]['x']}}},
-                 "PbPb2760": {"R_AA": {"C0": {"Y": HoldoutPrediction3, "x": self.RawData3["Data"]['x']},
-                                       "C1": {"Y": HoldoutPrediction4, "x": self.RawData4["Data"]['x']}}},
-                 "PbPb5020": {"R_AA": {"C0": {"Y": HoldoutPrediction5, "x": self.RawData5["Data"]['x']},
-                                       "C1": {"Y": HoldoutPrediction6, "x": self.RawData6["Data"]['x']}}}}
-     
-    # Store the holdout point in the dictionary
-    self.AllData['holdout_design'] = HoldoutDesign
-    self.AllData['holdout_model'] = HoldoutPrediction
+    if len(self.avg_residuals) < len(self.AllData['design']):
+      transformed_design_points = transformed_design_points[0:self.n_max_holdout_tests]
     
-    # Remove the holdout point from the design
-    self.RawDesign['Design'] = np.delete(self.RawDesign['Design'], exclude_index, axis = 0)
-  
-    # Remove the holdout point from the prediction
-    self.RawPrediction1['Prediction'] = np.delete(self.RawPrediction1['Prediction'], exclude_index, axis=0)
-    self.RawPrediction2['Prediction'] = np.delete(self.RawPrediction2['Prediction'], exclude_index, axis=0)
-    self.RawPrediction3['Prediction'] = np.delete(self.RawPrediction3['Prediction'], exclude_index, axis=0)
-    self.RawPrediction4['Prediction'] = np.delete(self.RawPrediction4['Prediction'], exclude_index, axis=0)
-    self.RawPrediction5['Prediction'] = np.delete(self.RawPrediction5['Prediction'], exclude_index, axis=0)
-    self.RawPrediction6['Prediction'] = np.delete(self.RawPrediction6['Prediction'], exclude_index, axis=0)
+    NDimension = len(self.AllData["labels"])
+    figure, axes = plt.subplots(figsize = (3 * NDimension, 3 * NDimension), ncols = NDimension, nrows = NDimension)
+    for i, row in enumerate(axes):
+        for j, ax in enumerate(row):
+            if i==j:
+                ax.hist(transformed_design_points[:,i], bins=50, weights=self.avg_residuals,
+                        range=self.Ranges[:,i], histtype='step', color='blue')
+                ax.set_xlabel(self.Names[i])
+                ax.set_xlim(*self.Ranges[:,j])
+            if i>j:
+                ax.hist2d(transformed_design_points[:, j], transformed_design_points[:, i], weights=self.avg_residuals,
+                          bins=50, range=[self.Ranges[:,j], self.Ranges[:,i]],
+                          cmap='Blues')
+                ax.set_xlabel(self.Names[j])
+                ax.set_ylabel(self.Names[i])
+                ax.set_xlim(*self.Ranges[:,j])
+                ax.set_ylim(*self.Ranges[:,i])
+            if i<j:
+                ax.axis('off')
+    plt.tight_layout(True)
+    plt.savefig('{}/Average_Residuals.pdf'.format(self.plot_dir), dpi = 192)
 
   #---------------------------------------------------------------
   # Initialize data
@@ -531,6 +544,44 @@ class RunAnalysis():
       axes[2][0].imshow((self.Covariance["PbPb5020"][("R_AA", "C0")][("R_AA", "C0")]))
       axes[2][1].imshow((self.Covariance["PbPb5020"][("R_AA", "C1")][("R_AA", "C1")]))
       figure.tight_layout()
+
+  #---------------------------------------------------------------
+  # Exclude a holdout point from the design and prediction, and store it
+  #---------------------------------------------------------------
+  def exclude_holdout(self, exclude_index = None):
+
+    # Store the holdout point design and prediction
+    HoldoutDesign = self.RawDesign['Design'][exclude_index]
+    HoldoutPrediction1 = self.RawPrediction1['Prediction'][exclude_index]
+    HoldoutPrediction2 = self.RawPrediction2['Prediction'][exclude_index]
+    HoldoutPrediction3 = self.RawPrediction3['Prediction'][exclude_index]
+    HoldoutPrediction4 = self.RawPrediction4['Prediction'][exclude_index]
+    HoldoutPrediction5 = self.RawPrediction5['Prediction'][exclude_index]
+    HoldoutPrediction6 = self.RawPrediction6['Prediction'][exclude_index]
+    
+    # Model predictions
+    HoldoutPrediction = {"AuAu200": {"R_AA": {"C0": {"Y": HoldoutPrediction1, "x": self.RawData1["Data"]['x']},
+                                       "C1": {"Y": HoldoutPrediction2, "x": self.RawData2["Data"]['x']}}},
+                 "PbPb2760": {"R_AA": {"C0": {"Y": HoldoutPrediction3, "x": self.RawData3["Data"]['x']},
+                                       "C1": {"Y": HoldoutPrediction4, "x": self.RawData4["Data"]['x']}}},
+                 "PbPb5020": {"R_AA": {"C0": {"Y": HoldoutPrediction5, "x": self.RawData5["Data"]['x']},
+                                       "C1": {"Y": HoldoutPrediction6, "x": self.RawData6["Data"]['x']}}}}
+     
+    # Store the holdout point in the dictionary
+    self.AllData['holdout_design'] = HoldoutDesign
+    self.AllData['holdout_model'] = HoldoutPrediction
+    
+    # Remove the holdout point from the design
+    self.RawDesign['Design'] = np.delete(self.RawDesign['Design'], exclude_index, axis = 0)
+
+    # Remove the holdout point from the prediction
+    self.RawPrediction1['Prediction'] = np.delete(self.RawPrediction1['Prediction'], exclude_index, axis=0)
+    self.RawPrediction2['Prediction'] = np.delete(self.RawPrediction2['Prediction'], exclude_index, axis=0)
+    self.RawPrediction3['Prediction'] = np.delete(self.RawPrediction3['Prediction'], exclude_index, axis=0)
+    self.RawPrediction4['Prediction'] = np.delete(self.RawPrediction4['Prediction'], exclude_index, axis=0)
+    self.RawPrediction5['Prediction'] = np.delete(self.RawPrediction5['Prediction'], exclude_index, axis=0)
+    self.RawPrediction6['Prediction'] = np.delete(self.RawPrediction6['Prediction'], exclude_index, axis=0)
+
 
   #---------------------------------------------------------------
   # Initialize data
