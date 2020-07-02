@@ -4,7 +4,9 @@ Class to steer Bayesian analysis and produce plots.
 
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
+import seaborn as sns
 import numpy as np
+import scipy
 
 import os
 import sys
@@ -24,15 +26,15 @@ class RunAnalysis():
     super(RunAnalysis, self).__init__(**kwargs)
     
     # Set output dir
-    self.output_dir = 'test_LBT'
+    self.output_dir = '20200624_test_LBT_matern_noise'
     self.debug_level = 0
     
     # Specify model:
-    #   M: Matter
-    #   L: LBT
-    #   ML1: Matter+LBT1
-    #   ML2: Matter+LBT2
-    self.model = 'L'
+    #   MATTER
+    #   LBT
+    #   MATTER+LBT1
+    #   MATTER+LBT2
+    self.model = 'LBT'
     
     # Emulator parameters
     self.retrain_emulator = True
@@ -48,7 +50,7 @@ class RunAnalysis():
     # Holdout test options
     self.do_holdout_tests = True
     self.do_closure_tests = True
-    self.n_max_holdout_tests = -1
+    self.n_max_holdout_tests = 3
     
     if self.n_max_holdout_tests < 0:
       self.n_max_holdout_tests = sys.maxsize
@@ -56,17 +58,17 @@ class RunAnalysis():
     # Set model parameter ranges
     # For Matter or LBT: (A, B, C, D)
     # For Matter+LBT 1,2: (A, C, B, D, Q), i.e. transformed versions of {A+C, A/(A+C), B, D, Q} from .dat
-    if self.model == 'M':
+    if self.model == 'MATTER':
       self.ranges = [(0.01, 2), (0.01, 20), (0.01, 2), (0.01, 20)]
-    elif self.model == 'L':
+    elif self.model == 'LBT':
       self.ranges = [(0.01, 2), (0.01, 20), (0.01, 2), (0.01, 20)]
-    elif self.model == 'ML1':
+    elif self.model == 'MATTER+LBT1':
       self.ranges = [(0, 1.5), (0, 1.0), (0, 20), (0, 20), (1, 4)]
-    elif self.model == 'ML2':
+    elif self.model == 'MATTER+LBT2':
       self.ranges = [(0, 1.5), (0, 1.0), (0, 20), (1, 4)]
     self.Ranges = np.array(self.ranges).T
       
-    if self.model == 'M' or self.model == 'L':
+    if self.model == 'MATTER' or self.model == 'LBT':
       self.Names = [r"$A$", r"$B$", r"$C$", r"$D$"]
       self.Names_untransformed = self.Names
     else:
@@ -175,7 +177,7 @@ class RunAnalysis():
     self.plot_MCMC_samples()
 
     # Transform coordinates
-    if self.model in ['ML1', 'ML2']:
+    if self.model in ['MATTER+LBT1', 'MATTER+LBT2']:
       self.TransformedSamples = np.copy(self.MCMCSamples)
       self.TransformedSamples[:,0] = self.MCMCSamples[:,0] * self.MCMCSamples[:,1]
       self.TransformedSamples[:,1] = self.MCMCSamples[:,0] - self.MCMCSamples[:,0] * self.MCMCSamples[:,1]
@@ -184,12 +186,74 @@ class RunAnalysis():
     
     # Plot posterior distributions of parameters
     self.plot_correlation(suffix = '', holdout_test = holdout_test)
-    if self.model in  ['ML1', 'ML2']:
+    if self.model in  ['MATTER+LBT1', 'MATTER+LBT2']:
       self.plot_correlation(suffix = '_Transformed', holdout_test = holdout_test)
     
     # Plot RAA for samples of the posterior parameter space
     sample_points = self.MCMCSamples[ np.random.choice(range(len(self.MCMCSamples)), 100), :]
     self.plot_RAA(sample_points, 'Posterior')
+    
+    plt.close('all')
+    
+    # Plot qhat/T^3 for the holdout point
+    if closure_test:
+      T_array = np.linspace(0.16, 0.8)
+      E = 100.
+        
+      # Plot truth value
+      qhat = [self.qhat(T=T, E=E, parameters=self.AllData['holdout_design']) for T in T_array]
+      plt.plot(T_array, qhat, sns.xkcd_rgb['pale red'],
+               linewidth=2., label='Truth')
+      plt.xlabel('T (GeV)')
+      plt.ylabel(r'$\hat{q}/T^3$')
+      
+      ymin = 0
+      ymax = 10
+      axes = plt.gca()
+      axes.set_ylim([ymin, ymax])
+      
+      # Plot 90% confidence interval of qhat solution
+      # --> Construct distribution of qhat by sampling each ABCD point
+      qhat_posteriors = [[self.qhat(T=T, E=E, parameters=parameters)
+                          for parameters in self.TransformedSamples]
+                          for T in T_array]
+      
+      # Get list of mean qhat values for each T
+      mean = [np.mean(qhat_values) for qhat_values in qhat_posteriors]
+      plt.plot(T_array, mean, sns.xkcd_rgb['denim blue'],
+               linewidth=2., linestyle='--', label='Extracted')
+               
+      # Get confidence interval for each T
+      # Note: use stdev rather than stderr,
+      #std_err_list = [scipy.stats.sem(qhat_values) for qhat_values in qhat_posteriors]
+      std_err_list = [np.std(qhat_values) for qhat_values in qhat_posteriors]
+      confidence = 0.9
+      n = len(qhat_posteriors[0])
+      q = scipy.stats.t.ppf((1 + confidence) / 2, n - 1)
+      h = [q*std_err for std_err in std_err_list]
+            
+      err_low = np.array(mean) - np.array(h)
+      err_up =  np.array(mean) + np.array(h)
+      plt.fill_between(T_array, err_low, err_up, color=sns.xkcd_rgb['light blue'],
+                       label='{}% Confidence Interval'.format(int(confidence*100)))
+               
+      # Draw legend
+      first_legend = plt.legend(title=self.model, title_fontsize=15,
+                               loc='upper right', fontsize=12)
+      ax = plt.gca().add_artist(first_legend)
+     
+      # Draw text info
+      
+      plt.savefig('{}/Closure.pdf'.format(self.plot_dir), dpi = 192)
+      
+      plt.close('all')
+      
+      # Plot distribution of posterior qhat values for a given T
+      plt.hist(qhat_posteriors[0], bins=50,
+              histtype='step', color='green')
+
+      plt.savefig('{}/ClosureDist.pdf'.format(self.plot_dir), dpi = 192)
+
 
     plt.close('all')
     
@@ -200,7 +264,7 @@ class RunAnalysis():
       
     # Tranform {A+C, A/(A+C), B, D, Q}  to {A,B,C,D,Q}
     design_points = self.AllData['design']
-    if self.model in ['ML1', 'ML2']:
+    if self.model in ['MATTER+LBT1', 'MATTER+LBT2']:
       transformed_design_points = np.copy(design_points)
       transformed_design_points[:,0] = design_points[:,0] * design_points[:,1]
       transformed_design_points[:,1] = design_points[:,0] - design_points[:,0] * design_points[:,1]
@@ -447,7 +511,7 @@ class RunAnalysis():
   def plot_avg_residuals(self):
 
     design_points = self.AllData['design']
-    if self.model in ['ML1', 'ML2']:
+    if self.model in ['MATTER+LBT1', 'MATTER+LBT2']:
       transformed_design_points = np.copy(design_points)
       transformed_design_points[:,0] = design_points[:,0] * design_points[:,1]
       transformed_design_points[:,1] = design_points[:,0] - design_points[:,0] * design_points[:,1]
@@ -478,6 +542,39 @@ class RunAnalysis():
                 ax.axis('off')
     plt.tight_layout(True)
     plt.savefig('{}/Average_Residuals.pdf'.format(self.plot_dir), dpi = 192)
+
+  #---------------------------------------------------------------
+  # Return value of qhat/T^3
+  def qhat(self, T=0, E=0, parameters=None):
+  
+    Lambda = 0.2
+    C_R = 4./3.
+    coeff = 42 * C_R * scipy.special.zeta(3) / np.pi * np.square(4*np.pi/9)
+  
+    if self.model == 'ML1':
+      A = parameters[0]
+      B = parameters[1]
+      C = parameters[2]
+      D = parameters[3]
+      Q0 = parameters[4]
+      term1 = A * (np.log(E/Lambda) - np.log(B)) / np.square(np.log(E/Lambda))  * np.heaviside(E-Q0, 0.)
+      term2 = C * (np.log(E/T) - np.log(D)) / np.square(np.log(E*T/(Lambda*Lambda)))
+    elif self.model == 'ML2':
+      A = parameters[0]
+      C = parameters[1]
+      D = parameters[2]
+      Q0 = parameters[3]
+      term1 = A * (np.log(E/Lambda) - np.log(Q0/Lambda)) / np.square(np.log(E/Lambda)) * np.heaviside(E-Q0, 0.)
+      term2 = C * (np.log(E/T) - np.log(D)) / np.square(np.log(E*T/(Lambda*Lambda)))
+    else:
+      A = parameters[0]
+      B = parameters[1]
+      C = parameters[2]
+      D = parameters[3]
+      term1 = A * (np.log(E/Lambda) - np.log(B)) / np.square(np.log(E/Lambda))
+      term2 = C * (np.log(E/T) - np.log(D)) / np.square(np.log(E*T/(Lambda*Lambda)))
+        
+    return coeff * (term1 + term2)
 
   #---------------------------------------------------------------
   # Initialize data
@@ -631,28 +728,28 @@ class RunAnalysis():
   def init_files(self):
   
     # Read data files
-    if self.model == 'M':
+    if self.model == 'MATTER':
       self.RawData1   = Reader.ReadData('input/MATTER/Data_PHENIX_AuAu200_RAACharged_0to10_2013.dat')
       self.RawData2   = Reader.ReadData('input/MATTER/Data_PHENIX_AuAu200_RAACharged_40to50_2013.dat')
       self.RawData3   = Reader.ReadData('input/MATTER/Data_ATLAS_PbPb2760_RAACharged_0to5_2015.dat')
       self.RawData4   = Reader.ReadData('input/MATTER/Data_ATLAS_PbPb2760_RAACharged_30to40_2015.dat')
       self.RawData5   = Reader.ReadData('input/MATTER/Data_CMS_PbPb5020_RAACharged_0to10_2017.dat')
       self.RawData6   = Reader.ReadData('input/MATTER/Data_CMS_PbPb5020_RAACharged_30to50_2017.dat')
-    elif self.model == 'L':
+    elif self.model == 'LBT':
       self.RawData1   = Reader.ReadData('input/LBTJake/Data_PHENIX_AuAu200_RAACharged_0to10_2013.dat')
       self.RawData2   = Reader.ReadData('input/LBTJake/Data_PHENIX_AuAu200_RAACharged_40to50_2013.dat')
       self.RawData3   = Reader.ReadData('input/LBTJake/Data_ATLAS_PbPb2760_RAACharged_0to5_2015.dat')
       self.RawData4   = Reader.ReadData('input/LBTJake/Data_ATLAS_PbPb2760_RAACharged_30to40_2015.dat')
       self.RawData5   = Reader.ReadData('input/LBTJake/Data_CMS_PbPb5020_RAACharged_0to10_2017.dat')
       self.RawData6   = Reader.ReadData('input/LBTJake/Data_CMS_PbPb5020_RAACharged_30to50_2017.dat')
-    elif self.model == 'ML1':
+    elif self.model == 'MATTER+LBT1':
       self.RawData1 = Reader.ReadData('input/MATTERLBT1/Data_PHENIX_AuAu200_RAACharged_0to10_2013.dat')
       self.RawData2 = Reader.ReadData('input/MATTERLBT1/Data_PHENIX_AuAu200_RAACharged_40to50_2013.dat')
       self.RawData3 = Reader.ReadData('input/MATTERLBT1/Data_ATLAS_PbPb2760_RAACharged_0to5_2015.dat')
       self.RawData4 = Reader.ReadData('input/MATTERLBT1/Data_ATLAS_PbPb2760_RAACharged_30to40_2015.dat')
       self.RawData5 = Reader.ReadData('input/MATTERLBT1/Data_CMS_PbPb5020_RAACharged_0to10_2017.dat')
       self.RawData6 = Reader.ReadData('input/MATTERLBT1/Data_CMS_PbPb5020_RAACharged_30to50_2017.dat')
-    elif self.model == 'ML2':
+    elif self.model == 'MATTER+LBT2':
       self.RawData1 = Reader.ReadData('input/MATTERLBT2/Data_PHENIX_AuAu200_RAACharged_0to10_2013.dat')
       self.RawData2 = Reader.ReadData('input/MATTERLBT2/Data_PHENIX_AuAu200_RAACharged_40to50_2013.dat')
       self.RawData3 = Reader.ReadData('input/MATTERLBT2/Data_ATLAS_PbPb2760_RAACharged_0to5_2015.dat')
@@ -678,38 +775,38 @@ class RunAnalysis():
     self.RawCov66E = Reader.ReadCovariance('input/Example/Covariance_CMS_PbPb5020_RAACharged_30to50_2017_CMS_PbPb5020_RAACharged_30to50_2017_SmallL.dat')
 
     # Read design points
-    if self.model == 'M':
+    if self.model == 'MATTER':
       self.RawDesign = Reader.ReadDesign('input/MATTER/Design.dat')
-    elif self.model == 'L':
+    elif self.model == 'LBT':
       self.RawDesign = Reader.ReadDesign('input/LBTJake/Design.dat')
-    elif self.model == 'ML1':
+    elif self.model == 'MATTER+LBT1':
       self.RawDesign = Reader.ReadDesign('input/MATTERLBT1/Design.dat')
-    elif self.model == 'ML2':
+    elif self.model == 'MATTER+LBT2':
       self.RawDesign= Reader.ReadDesign('input/MATTERLBT2/Design.dat')
 
     # Read model prediction
-    if self.model == 'M':
+    if self.model == 'MATTER':
       self.RawPrediction1   = Reader.ReadPrediction('input/MATTER/Prediction_PHENIX_AuAu200_RAACharged_0to10_2013.dat')
       self.RawPrediction2   = Reader.ReadPrediction('input/MATTER/Prediction_PHENIX_AuAu200_RAACharged_40to50_2013.dat')
       self.RawPrediction3   = Reader.ReadPrediction('input/MATTER/Prediction_ATLAS_PbPb2760_RAACharged_0to5_2015.dat')
       self.RawPrediction4   = Reader.ReadPrediction('input/MATTER/Prediction_ATLAS_PbPb2760_RAACharged_30to40_2015.dat')
       self.RawPrediction5   = Reader.ReadPrediction('input/MATTER/Prediction_CMS_PbPb5020_RAACharged_0to10_2017.dat')
       self.RawPrediction6   = Reader.ReadPrediction('input/MATTER/Prediction_CMS_PbPb5020_RAACharged_30to50_2017.dat')
-    elif self.model == 'L':
+    elif self.model == 'LBT':
       self.RawPrediction1   = Reader.ReadPrediction('input/LBTJake/Prediction_PHENIX_AuAu200_RAACharged_0to10_2013.dat')
       self.RawPrediction2   = Reader.ReadPrediction('input/LBTJake/Prediction_PHENIX_AuAu200_RAACharged_40to50_2013.dat')
       self.RawPrediction3   = Reader.ReadPrediction('input/LBTJake/Prediction_ATLAS_PbPb2760_RAACharged_0to5_2015.dat')
       self.RawPrediction4   = Reader.ReadPrediction('input/LBTJake/Prediction_ATLAS_PbPb2760_RAACharged_30to40_2015.dat')
       self.RawPrediction5   = Reader.ReadPrediction('input/LBTJake/Prediction_CMS_PbPb5020_RAACharged_0to10_2017.dat')
       self.RawPrediction6   = Reader.ReadPrediction('input/LBTJake/Prediction_CMS_PbPb5020_RAACharged_30to50_2017.dat')
-    elif self.model == 'ML1':
+    elif self.model == 'MATTER+LBT1':
       self.RawPrediction1 = Reader.ReadPrediction('input/MATTERLBT1/Prediction_PHENIX_AuAu200_RAACharged_0to10_2013.dat')
       self.RawPrediction2 = Reader.ReadPrediction('input/MATTERLBT1/Prediction_PHENIX_AuAu200_RAACharged_40to50_2013.dat')
       self.RawPrediction3 = Reader.ReadPrediction('input/MATTERLBT1/Prediction_ATLAS_PbPb2760_RAACharged_0to5_2015.dat')
       self.RawPrediction4 = Reader.ReadPrediction('input/MATTERLBT1/Prediction_ATLAS_PbPb2760_RAACharged_30to40_2015.dat')
       self.RawPrediction5 = Reader.ReadPrediction('input/MATTERLBT1/Prediction_CMS_PbPb5020_RAACharged_0to10_2017.dat')
       self.RawPrediction6 = Reader.ReadPrediction('input/MATTERLBT1/Prediction_CMS_PbPb5020_RAACharged_30to50_2017.dat')
-    elif self.model == 'ML2':
+    elif self.model == 'MATTER+LBT2':
       self.RawPrediction1 = Reader.ReadPrediction('input/MATTERLBT2/Prediction_PHENIX_AuAu200_RAACharged_0to10_2013.dat')
       self.RawPrediction2 = Reader.ReadPrediction('input/MATTERLBT2/Prediction_PHENIX_AuAu200_RAACharged_40to50_2013.dat')
       self.RawPrediction3 = Reader.ReadPrediction('input/MATTERLBT2/Prediction_ATLAS_PbPb2760_RAACharged_0to5_2015.dat')
