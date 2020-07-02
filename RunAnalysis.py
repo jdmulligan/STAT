@@ -2,6 +2,7 @@
 Class to steer Bayesian analysis and produce plots.
 '''
 
+import matplotlib as mpl
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -27,11 +28,11 @@ class RunAnalysis():
     super(RunAnalysis, self).__init__(**kwargs)
     
     # Set output dir
-    self.output_dir = '20200701_test_LBT'
+    self.output_dir_base = '20200701_test'
     self.debug_level = 0
     
-    # Specify model: [MATTER, LBT, MATTER+LBT1, MATTER+LBT2]
-    self.model = 'LBT'
+    # Specify model: ['LBT', 'MATTER', 'MATTER+LBT1', 'MATTER+LBT2']
+    self.models = ['LBT']
     
     # Emulator parameters
     self.retrain_emulator = True
@@ -47,10 +48,27 @@ class RunAnalysis():
     # Holdout test options
     self.do_holdout_tests = True
     self.do_closure_tests = False
-    self.n_max_holdout_tests = 1
+    self.n_max_holdout_tests = 100
     
     if self.n_max_holdout_tests < 0:
       self.n_max_holdout_tests = sys.maxsize
+      
+  #---------------------------------------------------------------
+  # Run analysis
+  #---------------------------------------------------------------
+  def run_all_models(self):
+  
+    for model in self.models:
+      self.model = model
+      self.output_dir = os.path.join(self.output_dir_base, self.model)
+      self.init_model_type()
+      print(self)
+      self.run_analysis()
+
+  #---------------------------------------------------------------
+  # Run analysis
+  #---------------------------------------------------------------
+  def init_model_type(self):
     
     # Set model parameter ranges
     # For Matter or LBT: (A, B, C, D)
@@ -71,9 +89,7 @@ class RunAnalysis():
     else:
       self.Names = [r"$A$", r"$C$", r"$B$", r"$D$", r"$Q$"]
       self.Names_untransformed = [r"$A+C$", r"$A/(A+C)$", r"$B$", r"$D$", r"$Q$"]
-      
-    print(self)
-  
+ 
   #---------------------------------------------------------------
   # Run analysis
   #---------------------------------------------------------------
@@ -136,26 +152,44 @@ class RunAnalysis():
   #---------------------------------------------------------------
   def plot_emulator_validation(self):
   
-    figure, axes = plt.subplots(figsize=(8*self.SystemCount, 8),
-                                ncols=self.SystemCount, nrows=2,
-                                gridspec_kw={'height_ratios': [2,1]})
-    for i in range(self.SystemCount):
+    # Construct a figure with two plots
+    plt.figure(1, figsize=(10, 6))
+    ax_scatter = plt.axes([0.1, 0.13, 0.6, 0.8]) # [left, bottom, width, height]
+    ax_residual = plt.axes([0.81, 0.13, 0.15, 0.8])
 
+    # Loop through emulators
+    for i in range(self.SystemCount):
+    
+      system = self.AllData['systems'][i]
+      if 'AuAu' in system:
+        system_label = 'Au-Au 200 GeV'
+      else:
+        if '2760' in system:
+          system_label = 'Pb-Pb 2.76 TeV'
+        elif '5020' in system:
+          system_label = 'Pb-Pb 5.02 TeV'
+        
+      color = sns.color_palette('colorblind')[i]
+        
       # Get RAA points
       true_raa = np.array(self.true_raa[i])
       emulator_raa = np.array(self.emulator_raa[i])
-      normalized_residual = np.divide(np.abs(true_raa-emulator_raa), true_raa)
-      
+      normalized_residual = np.divide(true_raa-emulator_raa, true_raa)
+
       # Draw scatter plot
-      axes[0][i].scatter(true_raa, emulator_raa)
-      axes[0][i].set_xlabel(r'$R_{AA}^{true}$')
-      axes[0][i].set_ylabel(r'$R_{AA}^{emulator}$')
+      ax_scatter.scatter(true_raa, emulator_raa, s=1,
+                         color=color, label=system_label)
+      ax_scatter.set_xlabel(r'$R_{AA}^{true}$', fontsize=18)
+      ax_scatter.set_ylabel(r'$R_{AA}^{emulator}$', fontsize=18)
+      ax_scatter.legend(title=self.model, title_fontsize=22,
+                        loc='upper left', fontsize=18, markerscale=10)
       
       # Draw normalization residuals
-      axes[1][i].hist(normalized_residual)
-      axes[1][i].set_xlabel(r'$\left(R_{AA}^{true} - R_{AA}^{emulator}\right) / R_{AA}^{true}$')
-      
-    system = self.AllData["systems"][i]
+      ax_residual.hist(normalized_residual, color=color, histtype='step',
+                       orientation='horizontal', linewidth=3, density=True)
+      ax_residual.set_ylabel(r'$\left(R_{AA}^{true} - R_{AA}^{emulator}\right) / R_{AA}^{true}$',
+                             fontsize=16)
+          
     plt.savefig('{}/EmulatorValidation.pdf'.format(self.plot_dir))
     plt.close('all')
 
@@ -874,4 +908,4 @@ class RunAnalysis():
 if __name__ == '__main__':
 
   analysis = RunAnalysis()
-  analysis.run_analysis()
+  analysis.run_all_models()
