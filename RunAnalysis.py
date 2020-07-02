@@ -6,6 +6,7 @@ import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+import pandas as pd
 import scipy
 
 import os
@@ -26,31 +27,27 @@ class RunAnalysis():
     super(RunAnalysis, self).__init__(**kwargs)
     
     # Set output dir
-    self.output_dir = '20200624_test_LBT_matern_noise'
+    self.output_dir = '20200701_test_LBT'
     self.debug_level = 0
     
-    # Specify model:
-    #   MATTER
-    #   LBT
-    #   MATTER+LBT1
-    #   MATTER+LBT2
+    # Specify model: [MATTER, LBT, MATTER+LBT1, MATTER+LBT2]
     self.model = 'LBT'
     
     # Emulator parameters
     self.retrain_emulator = True
     self.n_pc = 3
-    self.n_restarts = 100
+    self.n_restarts = 10
     
     # MCMC parameters
-    self.rerun_mcmc = True
+    self.rerun_mcmc = False
     self.n_walkers = 500
     self.n_burn_steps = 1000
     self.n_steps = 1000
     
     # Holdout test options
     self.do_holdout_tests = True
-    self.do_closure_tests = True
-    self.n_max_holdout_tests = 3
+    self.do_closure_tests = False
+    self.n_max_holdout_tests = 1
     
     if self.n_max_holdout_tests < 0:
       self.n_max_holdout_tests = sys.maxsize
@@ -74,7 +71,7 @@ class RunAnalysis():
     else:
       self.Names = [r"$A$", r"$C$", r"$B$", r"$D$", r"$Q$"]
       self.Names_untransformed = [r"$A+C$", r"$A/(A+C)$", r"$B$", r"$D$", r"$Q$"]
-
+      
     print(self)
   
   #---------------------------------------------------------------
@@ -92,6 +89,13 @@ class RunAnalysis():
     
       # Store a list of the chi2 of the holdout residual
       self.avg_residuals = []
+      
+      # For each emulator:
+      # Store lists of true RAA, emulator RAA at each holdout point
+      # (over all pt, centralities)
+      self.SystemCount = len(self.AllData["systems"])
+      self.true_raa = [[] for i in range(self.SystemCount)]
+      self.emulator_raa = [[] for i in range(self.SystemCount)]
     
       n_design_points = len(self.AllData['design'])
       for i in range(0, n_design_points):
@@ -122,9 +126,38 @@ class RunAnalysis():
       # Plot summary of holdout tests
       self.plot_dir = os.path.join(self.output_dir, 'holdout')
       self.plot_avg_residuals()
+      self.plot_emulator_validation()
       
       # Plot summary of closure tests
       # ...
+
+  #---------------------------------------------------------------
+  # Plot emulator validation
+  #---------------------------------------------------------------
+  def plot_emulator_validation(self):
+  
+    figure, axes = plt.subplots(figsize=(8*self.SystemCount, 8),
+                                ncols=self.SystemCount, nrows=2,
+                                gridspec_kw={'height_ratios': [2,1]})
+    for i in range(self.SystemCount):
+
+      # Get RAA points
+      true_raa = np.array(self.true_raa[i])
+      emulator_raa = np.array(self.emulator_raa[i])
+      normalized_residual = np.divide(np.abs(true_raa-emulator_raa), true_raa)
+      
+      # Draw scatter plot
+      axes[0][i].scatter(true_raa, emulator_raa)
+      axes[0][i].set_xlabel(r'$R_{AA}^{true}$')
+      axes[0][i].set_ylabel(r'$R_{AA}^{emulator}$')
+      
+      # Draw normalization residuals
+      axes[1][i].hist(normalized_residual)
+      axes[1][i].set_xlabel(r'$\left(R_{AA}^{true} - R_{AA}^{emulator}\right) / R_{AA}^{true}$')
+      
+    system = self.AllData["systems"][i]
+    plt.savefig('{}/EmulatorValidation.pdf'.format(self.plot_dir))
+    plt.close('all')
 
   #---------------------------------------------------------------
   # Run analysis
@@ -197,64 +230,69 @@ class RunAnalysis():
     
     # Plot qhat/T^3 for the holdout point
     if closure_test:
-      T_array = np.linspace(0.16, 0.8)
-      E = 100.
-        
-      # Plot truth value
-      qhat = [self.qhat(T=T, E=E, parameters=self.AllData['holdout_design']) for T in T_array]
-      plt.plot(T_array, qhat, sns.xkcd_rgb['pale red'],
-               linewidth=2., label='Truth')
-      plt.xlabel('T (GeV)')
-      plt.ylabel(r'$\hat{q}/T^3$')
+      self.plot_closure_test()
       
-      ymin = 0
-      ymax = 10
-      axes = plt.gca()
-      axes.set_ylim([ymin, ymax])
+    plt.close('all')
+    
+  #---------------------------------------------------------------
+  # Plot qhat/T^3 for the holdout point
+  #---------------------------------------------------------------
+  def plot_closure_test(self, E=100.):
+    
+    T_array = np.linspace(0.16, 0.5)
       
-      # Plot 90% confidence interval of qhat solution
-      # --> Construct distribution of qhat by sampling each ABCD point
-      qhat_posteriors = [[self.qhat(T=T, E=E, parameters=parameters)
-                          for parameters in self.TransformedSamples]
-                          for T in T_array]
-      
-      # Get list of mean qhat values for each T
-      mean = [np.mean(qhat_values) for qhat_values in qhat_posteriors]
-      plt.plot(T_array, mean, sns.xkcd_rgb['denim blue'],
-               linewidth=2., linestyle='--', label='Extracted')
-               
-      # Get confidence interval for each T
-      # Note: use stdev rather than stderr,
-      #std_err_list = [scipy.stats.sem(qhat_values) for qhat_values in qhat_posteriors]
-      std_err_list = [np.std(qhat_values) for qhat_values in qhat_posteriors]
-      confidence = 0.9
-      n = len(qhat_posteriors[0])
-      q = scipy.stats.t.ppf((1 + confidence) / 2, n - 1)
-      h = [q*std_err for std_err in std_err_list]
-            
-      err_low = np.array(mean) - np.array(h)
-      err_up =  np.array(mean) + np.array(h)
-      plt.fill_between(T_array, err_low, err_up, color=sns.xkcd_rgb['light blue'],
-                       label='{}% Confidence Interval'.format(int(confidence*100)))
-               
-      # Draw legend
-      first_legend = plt.legend(title=self.model, title_fontsize=15,
-                               loc='upper right', fontsize=12)
-      ax = plt.gca().add_artist(first_legend)
-     
-      # Draw text info
-      
-      plt.savefig('{}/Closure.pdf'.format(self.plot_dir), dpi = 192)
-      
-      plt.close('all')
-      
-      # Plot distribution of posterior qhat values for a given T
-      plt.hist(qhat_posteriors[0], bins=50,
-              histtype='step', color='green')
+    # Plot truth value
+    qhat = [self.qhat(T=T, E=E, parameters=self.AllData['holdout_design']) for T in T_array]
+    plt.plot(T_array, qhat, sns.xkcd_rgb['pale red'],
+             linewidth=2., label='Truth')
+    plt.xlabel('T (GeV)')
+    plt.ylabel(r'$\hat{q}/T^3$')
+    
+    ymin = 0
+    ymax = 10
+    axes = plt.gca()
+    axes.set_ylim([ymin, ymax])
+    
+    # Plot 90% confidence interval of qhat solution
+    # --> Construct distribution of qhat by sampling each ABCD point
+    qhat_posteriors = [[self.qhat(T=T, E=E, parameters=parameters)
+                        for parameters in self.TransformedSamples]
+                        for T in T_array]
+    
+    # Get list of mean qhat values for each T
+    mean = [np.mean(qhat_values) for qhat_values in qhat_posteriors]
+    plt.plot(T_array, mean, sns.xkcd_rgb['denim blue'],
+             linewidth=2., linestyle='--', label='Extracted')
+             
+    # Get confidence interval for each T
+    # Note: use stdev rather than stderr,
+    #std_err_list = [scipy.stats.sem(qhat_values) for qhat_values in qhat_posteriors]
+    std_err_list = [np.std(qhat_values) for qhat_values in qhat_posteriors]
+    confidence = 0.9
+    n = len(qhat_posteriors[0])
+    q = scipy.stats.t.ppf((1 + confidence) / 2, n - 1)
+    h = [q*std_err for std_err in std_err_list]
+          
+    err_low = np.array(mean) - np.array(h)
+    err_up =  np.array(mean) + np.array(h)
+    plt.fill_between(T_array, err_low, err_up, color=sns.xkcd_rgb['light blue'],
+                     label='{}% Confidence Interval'.format(int(confidence*100)))
+             
+    # Draw legend
+    first_legend = plt.legend(title=self.model, title_fontsize=15,
+                             loc='upper right', fontsize=12)
+    ax = plt.gca().add_artist(first_legend)
+   
+    # Draw text info
+    
+    plt.savefig('{}/Closure.pdf'.format(self.plot_dir), dpi = 192)
+    plt.close('all')
+    
+    # Plot distribution of posterior qhat values for a given T
+    plt.hist(qhat_posteriors[0], bins=50,
+            histtype='step', color='green')
 
-      plt.savefig('{}/ClosureDist.pdf'.format(self.plot_dir), dpi = 192)
-
-
+    plt.savefig('{}/ClosureDist.pdf'.format(self.plot_dir), dpi = 192)
     plt.close('all')
     
   #---------------------------------------------------------------
@@ -296,6 +334,7 @@ class RunAnalysis():
                 ax.axis('off')
     plt.tight_layout(True)
     plt.savefig('{}/DesignPoints.pdf'.format(self.plot_dir), dpi = 192)
+    plt.close('all')
     
   #---------------------------------------------------------------
   # Plot RAA of the model at a set of points in the parameter space
@@ -331,6 +370,7 @@ class RunAnalysis():
 
     plt.tight_layout(True)
     figure.savefig('{}/RAA_{}.pdf'.format(self.plot_dir, name), dpi = 192)
+    plt.close('all')
 
   #---------------------------------------------------------------
   # Plot residuals of RAA between the emulator and the true model values, at the design points
@@ -380,6 +420,8 @@ class RunAnalysis():
     
               if holdout_test:
                 model_y_1d = model_y
+                [self.true_raa[s1].append(raa) for raa in TempPrediction[S1][O][S2][i]]
+                [self.emulator_raa[s1].append(raa) for raa in model_y_1d]
               else:
                 model_y_1d = model_y[i]
     
@@ -392,6 +434,7 @@ class RunAnalysis():
 
     plt.tight_layout(True)
     figure.savefig('{}/RAA_Residuals_Design.pdf'.format(self.plot_dir), dpi = 192)
+    plt.close('all')
     
     if holdout_test:
       self.avg_residuals.append(sum_chi2/n)
@@ -444,7 +487,7 @@ class RunAnalysis():
                     
         plt.tight_layout(True)
         plt.savefig('{}/EmulatorPCs_{}.pdf'.format(self.plot_dir, system), dpi = 192)
-        plt.savefig('{}/EmulatorPCs_{}.pdf'.format(self.plot_dir, system), dpi = 192)
+        plt.close('all')
 
   #---------------------------------------------------------------
   # Check that burn-in is sufficient
@@ -463,6 +506,7 @@ class RunAnalysis():
           ax.plot(range(0, S, T), d[j, ::T, i], alpha = A)
       plt.tight_layout(True)
       plt.savefig('{}/MCMCSamples.pdf'.format(self.plot_dir), dpi = 192)
+      plt.close('all')
 
   #---------------------------------------------------------------
   # Plot posterior parameter distributions, either in  transformed
@@ -506,6 +550,7 @@ class RunAnalysis():
                 ax.axis('off')
     plt.tight_layout(True)
     plt.savefig('{}/Posterior_Correlations{}.pdf'.format(self.plot_dir, suffix), dpi = 192)
+    plt.close('all')
 
   #---------------------------------------------------------------
   def plot_avg_residuals(self):
@@ -542,6 +587,7 @@ class RunAnalysis():
                 ax.axis('off')
     plt.tight_layout(True)
     plt.savefig('{}/Average_Residuals.pdf'.format(self.plot_dir), dpi = 192)
+    plt.close('all')
 
   #---------------------------------------------------------------
   # Return value of qhat/T^3
