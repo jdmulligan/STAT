@@ -113,16 +113,15 @@ class Emulator:
 
         ptp = design.max - design.min
         print(ptp)
-        kernel = (
-            1. * kernels.Matern(
-                length_scale=ptp,
-                length_scale_bounds=np.outer(ptp, (.1, 10))
-            )
-            # kernels.WhiteKernel(
-            #     noise_level=.1**2,
-            #     noise_level_bounds=(.01**2, 1)
-            # )
-        )
+        
+        kernel_matern = kernels.Matern(length_scale=ptp,
+                                       nu=2.5,
+                                       length_scale_bounds=np.outer(ptp, (.1, 10))
+                                       )
+        kernel_noise = kernels.WhiteKernel(noise_level=.1**2,
+                                           noise_level_bounds=(.01**2, 1)
+                                           )
+        kernel = (kernel_matern + kernel_noise)
 
         # Fit a GP (optimize the kernel hyperparameters) to each PC.
         self.gps = [
