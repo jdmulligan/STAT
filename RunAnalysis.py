@@ -48,7 +48,7 @@ class RunAnalysis():
     # Holdout test options
     self.do_holdout_tests = True
     self.do_closure_tests = False
-    self.n_max_holdout_tests = 100
+    self.n_max_holdout_tests = -1
     
     if self.n_max_holdout_tests < 0:
       self.n_max_holdout_tests = sys.maxsize
@@ -141,7 +141,7 @@ class RunAnalysis():
        
       # Plot summary of holdout tests
       self.plot_dir = os.path.join(self.output_dir, 'holdout')
-      self.plot_avg_residuals()
+      #self.plot_avg_residuals()
       self.plot_emulator_validation()
       
       # Plot summary of closure tests
@@ -185,8 +185,10 @@ class RunAnalysis():
                         loc='upper left', fontsize=18, markerscale=10)
       
       # Draw normalization residuals
+      max = 0.5
+      bins = np.linspace(-max, max)
       ax_residual.hist(normalized_residual, color=color, histtype='step',
-                       orientation='horizontal', linewidth=3, density=True)
+                       orientation='horizontal', linewidth=3, density=True, bins=bins)
       ax_residual.set_ylabel(r'$\left(R_{AA}^{true} - R_{AA}^{emulator}\right) / R_{AA}^{true}$',
                              fontsize=16)
           
