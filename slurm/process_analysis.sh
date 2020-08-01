@@ -20,7 +20,7 @@ mkdir -p $OUTPUT_DIR
 
 # Run python script via pipenv
 cd /software/users/james/jetscape-docker/STAT
-python3 run_all_models.py -c analysis_config.yaml -o $OUTPUT_DIR -i $(($TASK_ID-1))
+pipenv run python run_all_models.py -c analysis_config.yaml -o $OUTPUT_DIR -i $(($TASK_ID-2))
 
 # Move stdout to appropriate folder
 mv /rstorage/james/qhat/slurm-${JOB_ID}_${TASK_ID}.out /rstorage/james/qhat/${JOB_ID}/
