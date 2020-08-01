@@ -6,8 +6,8 @@ models: ['LBT', 'MATTER+LBT1']
 
 # Emulator parameters
 retrain_emulator: True
-n_pc: 1
-n_restarts: 10
+n_pc: 3
+n_restarts: 50
 
 # MCMC parameters
 rerun_mcmc: True

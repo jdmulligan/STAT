@@ -15,7 +15,6 @@ import sys
 import pickle
 import argparse
 
-import src.reader as Reader
 from src.design import Design
 from src import emulator, mcmc
 
@@ -27,13 +26,10 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
   #---------------------------------------------------------------
   # Constructor
   #---------------------------------------------------------------
-  def __init__(self, config_file, output_dir, exclude_index, **kwargs):
+  def __init__(self, config_file, model, output_dir, exclude_index, **kwargs):
   
     # Initialize base class
-    super(RunAnalysis, self).__init__(config_file, output_dir, **kwargs)
-  
-    # Analysis-specific initialization
-    self.exclude_index = exclude_index
+    super(RunAnalysis, self).__init__(config_file, model, output_dir, exclude_index, **kwargs)
 
   #---------------------------------------------------------------
   # Run analysis
@@ -525,13 +521,17 @@ if __name__ == '__main__':
   
     # Define arguments
     parser = argparse.ArgumentParser(description='Jetscape STAT analysis')
-    parser.add_argument('-o', '--outputdir', action='store',
-                        type=str, metavar='outputdir',
-                        default='./STATGallery')
     parser.add_argument('-c', '--configFile', action='store',
                         type=str, metavar='configFile',
                         default='analysis_config.yaml',
                         help='Path of config file')
+    parser.add_argument('-m', '--model', action='store',
+                        type=str, metavar='model',
+                        default='LBT',
+                        help='model')
+    parser.add_argument('-o', '--outputdir', action='store',
+                        type=str, metavar='outputdir',
+                        default='./STATGallery')
     parser.add_argument('-i', '--excludeIndex', action='store',
                         type=int, metavar='excludeIndex',
                         default=-1,
@@ -542,15 +542,12 @@ if __name__ == '__main__':
     
     print('')
     print('Configuring RunAnalysis...')
-    print('configFile: \'{0}\''.format(args.configFile))
-    print('outputdir: \'{0}\''.format(args.outputdir))
-    print('exclude_index: \'{0}\''.format(args.excludeIndex))
     
     # If invalid configFile is given, exit
     if not os.path.exists(args.configFile):
       print('File \"{0}\" does not exist! Exiting!'.format(args.configFile))
       sys.exit(0)
     
-    analysis = RunAnalysis(config_file = args.configFile, output_dir=args.outputdir,
-                           exclude_index=args.excludeIndex)
-    analysis.run_all_models()
+    analysis = RunAnalysis(config_file=args.configFile, model=args.model,
+                           output_dir=args.outputdir, exclude_index=args.excludeIndex)
+    analysis.run_model()
