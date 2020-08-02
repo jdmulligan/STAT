@@ -16,7 +16,7 @@ import pickle
 import argparse
 
 from src.design import Design
-from src import emulator, mcmc
+from src import emulator, mcmc, init
 
 import run_analysis_base
 
@@ -38,6 +38,9 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
   
     # Initialize data and model from files
     self.init()
+    
+    # Initialize pickled config settings
+    init.Init().Initialize(self)
     
     # If exclude_index < 0, perform standard analysis
     if self.exclude_index < 0:
@@ -95,9 +98,9 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
       os.system('python -m src.emulator --retrain --npc {} --nrestarts {}'.format(self.n_pc, self.n_restarts))
     
     # Load trained emulator
-    self.EmulatorAuAu200 = emulator.Emulator.from_cache('AuAu200')
-    self.EmulatorPbPb2760 = emulator.Emulator.from_cache('PbPb2760')
-    self.EmulatorPbPb5020 = emulator.Emulator.from_cache('PbPb5020')
+    self.EmulatorAuAu200 = emulator.Emulator.from_cache('AuAu200', self.cachedir)
+    self.EmulatorPbPb2760 = emulator.Emulator.from_cache('PbPb2760', self.cachedir)
+    self.EmulatorPbPb5020 = emulator.Emulator.from_cache('PbPb5020', self.cachedir)
     
     # Construct plots characterizing the emulator
     self.plot_design(holdout_test = holdout_test)

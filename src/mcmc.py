@@ -32,16 +32,15 @@ import emcee
 import h5py
 import numpy as np
 from scipy.linalg import lapack
-from . import workdir, systems, observables, exp_data_list, exp_cov#, expt
-from .design import Design
-from .emulator import emulators
 import pickle
 from scipy.stats import multivariate_normal
 
-
+from . import init
+from .design import Design
+from .emulator import emulators
 
 def cov(
-        system, obs1, subobs1, obs2, subobs2,
+        exp_data_list, system, obs1, subobs1, obs2, subobs2,
         stat_frac=1e-4, sys_corr_length=100, cross_factor=.8,
         corr_obs={
             frozenset({'dNch_deta', 'dET_deta', 'dN_dy'}),
@@ -192,8 +191,12 @@ class Chain:
     system designs have the same parameters and ranges (except for the norms).
 
     """
-    def __init__(self, path=workdir / 'cache' / 'mcmc_chain.hdf'):
-        self.path = path
+    def __init__(self):
+        
+        init.Init().Initialize(self)
+        #print(self)
+        
+        self.path = self.workdir / 'cache' / 'mcmc_chain.hdf'
         self.path.parent.mkdir(exist_ok=True)
 
         # parameter order:
@@ -217,8 +220,8 @@ class Chain:
         """
 
         def keys_labels_range():
-            d = Design(systems[0])
-            klr = zip(d.keys, d.labels, d.range)
+            d = Design(self.systems[0])
+            klr = zip(d.keys, d.labels, d.ranges)
 
             yield from klr
 
@@ -229,14 +232,13 @@ class Chain:
         self.ndim = len(self.range)
         self.min, self.max = map(np.array, zip(*self.range))
 
-        self._common_indices = list(range(len(systems), self.ndim))
+        self._common_indices = list(range(len(self.systems), self.ndim))
 
         self._slices = {}
         self._expt_y = {}
         self._expt_cov = {}
-        self.observables = observables
         # pre-compute the experimental data vectors and covariance matrices
-        for sys, sysdata in exp_data_list.items():
+        for sys, sysdata in self.exp_data_list.items():
             nobs = 0
 
             self._slices[sys] = []
@@ -262,19 +264,19 @@ class Chain:
             self._expt_cov[sys] = np.zeros((nobs, nobs))
 
             for obs1, subobs1, slc1 in self._slices[sys]:
-                self._expt_y[sys][slc1] = exp_data_list[sys][obs1][subobs1]['y']
-                if exp_cov is None:
+                self._expt_y[sys][slc1] = self.exp_data_list[sys][obs1][subobs1]['y']
+                if self.exp_cov is None:
                     for obs2, subobs2, slc2 in self._slices[sys]:
-                        self._expt_cov[sys][slc1, slc2] = cov(
+                        self._expt_cov[sys][slc1, slc2] = cov(self.exp_data_list,
                             sys, obs1, subobs1, obs2, subobs2
                         )
 
             #Allows user to specify experimental covariance matrix in __init__.py
-            if exp_cov is not None:
+            if self.exp_cov is not None:
                 for obs1, subobs1, slc1 in self._slices[sys]:
                     for obs2, subobs2, slc2 in self._slices[sys]:
-                        if exp_cov[sys][(obs1, subobs1)][(obs2, subobs2)] is not None:
-                            self._expt_cov[sys][slc1, slc2] = exp_cov[sys][(obs1, subobs1)][(obs2, subobs2)]
+                        if self.exp_cov[sys][(obs1, subobs1)][(obs2, subobs2)] is not None:
+                            self._expt_cov[sys][slc1, slc2] = self.exp_cov[sys][(obs1, subobs1)][(obs2, subobs2)]
 
             # print(self._expt_y[sys])
             # print(self._expt_cov[sys])
@@ -288,7 +290,7 @@ class Chain:
                 X[:, ],#[n] + self._common_indices],
                 **kwargs
             )
-            for n, sys in enumerate(systems)
+            for n, sys in enumerate(self.systems)
         }
 
     def log_posterior(self, X, extra_std_prior_scale=0.05, model_sys_error = False):
@@ -322,7 +324,7 @@ class Chain:
                 X[inside], return_cov=True, extra_std=extra_std
             )
 
-            for sys in systems:
+            for sys in self.systems:
                 nobs = self._expt_y[sys].size
                 # allocate difference (model - expt) and covariance arrays
                 dY = np.empty((nsamples, nobs))
@@ -488,6 +490,16 @@ class Chain:
             ])
 
         return self._predict(X)
+        
+    #---------------------------------------------------------------
+    # Return formatted string of class members
+    #---------------------------------------------------------------
+    def __str__(self):
+        s = []
+        variables = self.__dict__.keys()
+        for v in variables:
+            s.append('{} = {}'.format(v, self.__dict__[v]))
+        return "[i] {} with \n .  {}".format(self.__class__.__name__, '\n .  '.join(s))
 
 
 def credible_interval(samples, ci=.9):

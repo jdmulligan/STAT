@@ -27,10 +27,10 @@ import subprocess
 
 import numpy as np
 
-from . import cachedir, parse_system, keys, labels, ranges, design_array, systems
+from . import init
+from . import parse_system
 
-
-def generate_lhs(npoints, ndim, seed):
+def generate_lhs(cachedir, npoints, ndim, seed):
     """
     Generate a maximin Latin-hypercube sample (LHS) with the given number of
     points, dimensions, and random seed.
@@ -104,13 +104,13 @@ class Design:
     project, if not completely rewritten.
 
     """
-    def __init__(self, system, keys=keys, ranges=ranges,labels=labels, array = design_array, npoints=500, validation=False, seed=None):
+    def __init__(self, system, npoints=500, validation=False, seed=None):
         self.system = system
         self.projectiles, self.beam_energy = parse_system(system)
         self.type = 'validation' if validation else 'main'
 
-        self.keys = keys
-        self.range = ranges
+        init.Init().Initialize(self)
+        #print(self)
 
        # # 5.02 TeV has ~1.2x particle production as 2.76 TeV
        # # [https://inspirehep.net/record/1410589]
@@ -140,6 +140,7 @@ class Design:
         #   - wrap normal text with \mathrm{}
         #   - escape spaces
         #   - surround with $$
+        labels = self.labels
         self.labels = [
             re.sub(r'({[A-Za-z]+})', r'\\mathrm\\1', i)
             .replace(' ', r'\ ')
@@ -147,8 +148,8 @@ class Design:
             for i in labels
         ]
 
-        self.ndim = len(self.range)
-        self.min, self.max = map(np.array, zip(*self.range))
+        self.ndim = len(self.ranges)
+        self.min, self.max = map(np.array, zip(*self.ranges))
 
         # use padded numbers for design point names
         fmt = '{:0' + str(len(str(npoints - 1))) + 'd}'
@@ -186,14 +187,12 @@ class Design:
         if seed is None:
             seed = 751783496 if validation else 450829120
 
-        if array is None:
-            self.array = lhsmin + (self.max - lhsmin)*generate_lhs(
+        if self.design_array is None:
+            self.design_array = lhsmin + (self.max - lhsmin)*generate_lhs(
                 npoints=npoints, ndim=self.ndim, seed=seed
             )
-        else:
-            self.array = array
         #print('Design is')
-        #print(self.array)
+        #print(self.design_array)
         # As it turns out, the minimum for tau_fs (above) was not high
         # enough.  For reasons I don't quite understand, including low
         # tau_fs points in the design messes with GP training, leading to
@@ -214,18 +213,18 @@ class Design:
      #       # the design range (see above).
      #       slope_idx = self.keys.index('etas_slope')
      #       slope_max = self.max[slope_idx]
-     #       self.array[:, slope_idx] = \
-     #           np.tan(np.pi/2/slope_max*self.array[:, slope_idx])
+     #       self.design_array[:, slope_idx] = \
+     #           np.tan(np.pi/2/slope_max*self.design_array[:, slope_idx])
      #       keep = (
-     #           (self.array[:, tau_fs_idx] >= tau_fs_min) &
-     #           (self.array[:, slope_idx] <= slope_max)
+     #           (self.design_array[:, tau_fs_idx] >= tau_fs_min) &
+     #           (self.design_array[:, slope_idx] <= slope_max)
      #       )
      #       # Remove outlier point.  Probably caused by bug in hydro code
      #       # related to very low eta/s min ~ 2e-6.  Despite having the lowest
      #       # eta/s min in the design, this point had very low flow and
      #       # anomalous energy / particle production.
      #       keep[281] = False
-     #       self.array = self.array[keep]
+     #       self.design_array = self.design_array[keep]
      #       self.points = list(itertools.compress(self.points, keep))
      #       logging.debug(
      #           'removed validation points with tau_fs < %s and '
@@ -236,9 +235,9 @@ class Design:
      #       # Resample ONLY the points with tau_fs below the minimum, leaving
      #       # other parameters unchanged.  Sample one new tau_fs value in each
      #       # equal subdivision of the new range (Latin sample).
-     #       resample = self.array[:, tau_fs_idx] < tau_fs_min
+     #       resample = self.design_array[:, tau_fs_idx] < tau_fs_min
      #       nresample = np.count_nonzero(resample)
-     #       array_rs = self.array[resample]
+     #       array_rs = self.design_array[resample]
      #       bins = np.linspace(
      #           tau_fs_min, self.max[tau_fs_idx],
      #           nresample + 1
@@ -246,7 +245,7 @@ class Design:
      #       array_rs[:, tau_fs_idx] = \
      #           np.random.RandomState(2603139165).uniform(bins[:-1], bins[1:])
      #       # Move the resampled points to the end of the design.
-     #       self.array = np.concatenate([self.array[~resample], array_rs])
+     #       self.design_array = np.concatenate([self.design_array[~resample], array_rs])
      #       self.points = (
      #           list(itertools.compress(self.points, ~resample)) +
      #           [fmt.format(n) for n in range(npoints, npoints + nresample)]
@@ -257,7 +256,7 @@ class Design:
      #       )
 
     def __array__(self):
-        return self.array
+        return self.design_array
 
   #  _template = ''.join(
   #      '{} = {}\n'.format(key, ' '.join(args)) for (key, *args) in
@@ -295,7 +294,7 @@ class Design:
         outdir = basedir / self.type / self.system
         outdir.mkdir(parents=True, exist_ok=True)
 
-        for point, row in zip(self.points, self.array):
+        for point, row in zip(self.points, self.design_array):
             kwargs = dict(
                 zip(self.keys, row),
                 projectiles=self.projectiles,
@@ -317,7 +316,18 @@ class Design:
 
     def print_array(self):
         print('Design is')
-        print(self.array)
+        print(self.design_array)
+        
+    #---------------------------------------------------------------
+    # Return formatted string of class members
+    #---------------------------------------------------------------
+    def __str__(self):
+        s = []
+        variables = self.__dict__.keys()
+        for v in variables:
+            s.append('{} = {}'.format(v, self.__dict__[v]))
+        return "[i] {} with \n .  {}".format(self.__class__.__name__, '\n .  '.join(s))
+
 #def main():
 #    import argparse
 #    from . import systems
@@ -340,3 +350,4 @@ class Design:
 #      print('Design is')
 #      print(Design(system).array)
 #
+

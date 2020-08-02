@@ -28,7 +28,8 @@ from sklearn.gaussian_process import GaussianProcessRegressor as GPR
 from sklearn.gaussian_process import kernels
 from sklearn.preprocessing import StandardScaler
 
-from . import cachedir, lazydict, observables, data_list#model
+from . import init
+from . import lazydict
 from .design import Design
 
 
@@ -75,16 +76,18 @@ class Emulator:
             'training emulator for system %s (%d PC, %d restarts)',
             system, npc, nrestarts
         )
+        
+        init.Init().Initialize(self)
+        #print(self)
 
         Y = []
         self._slices = {}
-        self.observables = observables
         # Build an array of all observables to emulate.
         nobs = 0
         for obs, subobslist in self.observables:
             self._slices[obs] = {}
             for subobs in subobslist:
-                Y.append(data_list[system][obs][subobs]['Y'])
+                Y.append(self.data_list[system][obs][subobs]['Y'])
                 n = Y[-1].shape[1]
                 self._slices[obs][subobs] = slice(nobs, nobs + n)
                 nobs += n
@@ -173,7 +176,7 @@ class Emulator:
         self._cov_trunc.flat[::nobs + 1] += 1e-4 * self.scaler.var_
 
     @classmethod
-    def from_cache(cls, system, retrain=False, **kwargs):
+    def from_cache(cls, system, cachedir, retrain=False, **kwargs):
         """
         Load the emulator for `system` from the cache if available, otherwise
         train and cache a new instance.
@@ -309,13 +312,24 @@ class Emulator:
             ], axis=2)
         )
 
+    #---------------------------------------------------------------
+    # Return formatted string of class members
+    #---------------------------------------------------------------
+    def __str__(self):
+        s = []
+        variables = self.__dict__.keys()
+        for v in variables:
+            s.append('{} = {}'.format(v, self.__dict__[v]))
+        return "[i] {} with \n .  {}".format(self.__class__.__name__, '\n .  '.join(s))
 
-emulators = lazydict(Emulator.from_cache)
 
+emulators = lazydict(Emulator.from_cache, init.Init().cachedir)
 
 if __name__ == '__main__':
     import argparse
-    from . import systems
+    
+    systems = init.Init().systems()
+    
     def arg_to_system(arg):
         if arg not in systems:
             raise argparse.ArgumentTypeError(arg)
@@ -348,8 +362,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
     kwargs = vars(args)
 
+    cachedir = init.Init().cachedir
     for s in kwargs.pop('systems'):
-        emu = Emulator.from_cache(s, **kwargs)
+        emu = Emulator.from_cache(s, cachedir, **kwargs)
 
         print(s)
         print('{} PCs explain {:.5f} of variance'.format(
@@ -364,3 +379,4 @@ if __name__ == '__main__':
                 'GP {}: {:.5f} of variance, LML = {:.5g}, kernel: {}'
                 .format(n, evr, gp.log_marginal_likelihood_value_, gp.kernel_)
             )
+

@@ -30,6 +30,7 @@ class RunAnalysisBase():
     self.output_dir_base = output_dir
     self.exclude_index = exclude_index
     
+    # Initialize yaml settings
     self.initialize_config(config_file)
     
   #---------------------------------------------------------------
