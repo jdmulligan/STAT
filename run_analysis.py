@@ -2,6 +2,8 @@
 Class to steer Bayesian analysis and produce plots.
 '''
 
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib as mpl
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
