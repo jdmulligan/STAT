@@ -53,6 +53,7 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
       n_design_points = len(self.AllData['design'])
       if self.exclude_index > n_design_points:
         print('Design point {} does not exist for {}, which has {} design points'.format(self.exclude_index, self.model, n_design_points))
+        os.system('rm -r {}'.format(self.workdir))
         return
       
       # For each emulator:
