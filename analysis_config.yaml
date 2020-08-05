@@ -2,7 +2,7 @@
 debug_level: 0
 
 # Specify model: ['LBT', 'MATTER', 'MATTER+LBT1', 'MATTER+LBT2']
-models: ['LBT', 'MATTER+LBT1']
+models: ['LBT', 'MATTER', 'MATTER+LBT1', 'MATTER+LBT2']
 
 # Emulator parameters
 retrain_emulator: True

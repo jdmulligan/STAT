@@ -63,7 +63,7 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     
       # Initialize data structures, with the updated holdout information
       print('Running holdout test {} / {}'.format(self.exclude_index, n_design_points))
-      self.init(exclude_index = self.exclude_index)
+      self.initialize(exclude_index = self.exclude_index)
       print('    {}'.format(self.AllData['holdout_design']))
       if len(self.AllData['design']) != n_design_points - 1:
         sys.exit('Only {} design points remain, but there should be {}!'.format(
