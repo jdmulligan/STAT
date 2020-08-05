@@ -31,6 +31,9 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     # Initialize base class
     super(RunAnalysis, self).__init__(config_file, model, output_dir, exclude_index, **kwargs)
     
+    # Write dictionary of results to pickle
+    self.output_dict = {}
+    
   #---------------------------------------------------------------
   # Run analysis
   #---------------------------------------------------------------
@@ -51,7 +54,7 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     
       # Check if exclude_index exists
       n_design_points = len(self.AllData['design'])
-      if self.exclude_index > n_design_points:
+      if self.exclude_index > n_design_points-1:
         print('Design point {} does not exist for {}, which has {} design points'.format(self.exclude_index, self.model, n_design_points))
         os.system('rm -r {}'.format(self.workdir))
         return
@@ -149,13 +152,16 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     
     # Write result to pkl
     if holdout_test:
-      with open(os.path.join(self.workdir, 'result.pkl'), 'wb') as f:
-        pickle.dump(self.true_raa, f)
-        pickle.dump(self.emulator_raa, f)
+      self.output_dict['true_raa'] = self.true_raa
+      self.output_dict['emulator_raa'] = self.emulator_raa
     
     # Plot qhat/T^3 for the holdout point
     if closure_test:
       self.plot_closure_test()
+    
+    # Write result to pkl
+    with open(os.path.join(self.workdir, 'result.pkl'), 'wb') as f:
+      pickle.dump(self.output_dict, f)
       
     plt.close('all')
     
@@ -221,10 +227,10 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     plt.close('all')
     
     # Write result to pkl
-    with open(os.path.join(self.plot_dir, 'result.pkl'), 'wb') as f:
-      pickle.dump(T_array, f)
-      pickle.dump(qhat, f)            # Truth
-      pickle.dump(mean, f)            # Extracted
+    self.output_dict['T_array'] = T_array
+    self.output_dict['qhat'] = qhat                         # Truth
+    self.output_dict['mean'] = mean                         # Extracted mean
+    self.output_dict['qhat_posteriors'] = qhat_posteriors   # Extracted posteriors
     
   #---------------------------------------------------------------
   # Plot design points
