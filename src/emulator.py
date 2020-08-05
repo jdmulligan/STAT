@@ -15,6 +15,7 @@ and `Gaussian process regression
 
 import logging
 import pickle
+import os
 
 import numpy as np
 
@@ -71,14 +72,13 @@ class Emulator:
 
     """
 
-    def __init__(self, system, npc=10, nrestarts=0):
+    def __init__(self, system, workdir, npc=10, nrestarts=0):
         logging.info(
             'training emulator for system %s (%d PC, %d restarts)',
             system, npc, nrestarts
         )
         
-        init.Init().Initialize(self)
-        #print(self)
+        init.Init(workdir).Initialize(self)
 
         Y = []
         self._slices = {}
@@ -106,7 +106,7 @@ class Emulator:
 
         # Define kernel (covariance function):
         # Gaussian correlation (RBF) plus a noise term.
-        design = Design(system)
+        design = Design(system, workdir)
 
        # design = joblib.load(filename='cache/lhs/design_s.p')
        # maxes = np.apply_along_axis(max,0,design)
@@ -176,27 +176,29 @@ class Emulator:
         self._cov_trunc.flat[::nobs + 1] += 1e-4 * self.scaler.var_
 
     @classmethod
-    def from_cache(cls, system, cachedir, retrain=False, **kwargs):
+    def from_cache(cls, system, workdir, npc=0, nrestarts=0, retrain=False):
         """
         Load the emulator for `system` from the cache if available, otherwise
         train and cache a new instance.
 
         """
-        cachefile = cachedir / 'emulator' / '{}.pkl'.format(system)
+        cachedir = os.path.join(workdir, 'cache/emulator')
+        if not os.path.exists(cachedir):
+            os.makedirs(cachedir)
+        cachefile = os.path.join(cachedir, '{}.pkl'.format(system))
 
         # cache the __dict__ rather than the Emulator instance itself
         # this way the __name__ doesn't matter, e.g. a pickled
         # __main__.Emulator can be unpickled as a src.emulator.Emulator
-        if not retrain and cachefile.exists():
+        if not retrain and os.path.exists(cachefile):
             logging.debug('loading emulator for system %s from cache', system)
             emu = cls.__new__(cls)
             emu.__dict__ = joblib.load(cachefile)
             return emu
 
-        emu = cls(system, **kwargs)
+        emu = cls(system, workdir, npc, nrestarts)
 
         logging.info('writing cache file %s', cachefile)
-        cachefile.parent.mkdir(exist_ok=True)
         joblib.dump(emu.__dict__, cachefile, protocol=pickle.HIGHEST_PROTOCOL)
 
         return emu
@@ -322,24 +324,20 @@ class Emulator:
             s.append('{} = {}'.format(v, self.__dict__[v]))
         return "[i] {} with \n .  {}".format(self.__class__.__name__, '\n .  '.join(s))
 
+    #---------------------------------------------------------------
+    # Return emulator
+    #---------------------------------------------------------------
+    def emulators(self, system, workdir):
 
-emulators = lazydict(Emulator.from_cache, init.Init().cachedir)
+        return lazydict(self.from_cache, system, workdir)
 
 if __name__ == '__main__':
     import argparse
     
-    systems = init.Init().systems()
-    
-    def arg_to_system(arg):
-        if arg not in systems:
-            raise argparse.ArgumentTypeError(arg)
-        return arg
-
     parser = argparse.ArgumentParser(
         description='train emulators for each collision system',
         argument_default=argparse.SUPPRESS
     )
-
     parser.add_argument(
         '--npc', type=int,
         help='number of principal components'
@@ -353,18 +351,18 @@ if __name__ == '__main__':
         '--retrain', action='store_true',
         help='retrain even if emulator is cached'
     )
-    parser.add_argument(
-        'systems', nargs='*', type=arg_to_system,
-        default=systems, metavar='SYSTEM',
-        help='system(s) to train'
-    )
+    parser.add_argument('-o', '--output_dir', action='store',
+                        type=str, metavar='output_dir',
+                        help='output directory to write/read emulator')
 
     args = parser.parse_args()
     kwargs = vars(args)
-
-    cachedir = init.Init().cachedir
-    for s in kwargs.pop('systems'):
-        emu = Emulator.from_cache(s, cachedir, **kwargs)
+    
+    init0 = init.Init(args.output_dir)
+    systems = init0.systems()
+    cachedir = init0.cachedir
+    for s in systems:
+        emu = Emulator.from_cache(s, args.output_dir, args.npc, args.nrestarts, args.retrain)
 
         print(s)
         print('{} PCs explain {:.5f} of variance'.format(

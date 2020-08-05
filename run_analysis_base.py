@@ -30,6 +30,20 @@ class RunAnalysisBase():
     self.output_dir_base = output_dir
     self.exclude_index = exclude_index
     
+    # Set various paths
+    if exclude_index < 0:
+        subdir = 'main'
+    else:
+        subdir =  'holdout/{}'.format(exclude_index)
+    self.workdir = os.path.join(output_dir, '{}/{}'.format(model,subdir))
+    
+    if not os.path.exists(self.workdir):
+        os.makedirs(self.workdir)
+    
+    self.pkl_path = os.path.join(self.workdir,'default.p')
+    self.cache_dir = os.path.join(self.workdir,'cache')
+    self.cachedir_emulator = os.path.join(self.cache_dir , 'emulator')
+    
     # Initialize yaml settings
     self.initialize_config(config_file)
     
@@ -136,7 +150,7 @@ class RunAnalysisBase():
   #---------------------------------------------------------------
   # Initialize data
   #---------------------------------------------------------------
-  def init(self, exclude_index = -1):
+  def initialize(self, exclude_index = -1):
   
     self.init_files()
     self.init_model(exclude_index)
@@ -202,9 +216,9 @@ class RunAnalysisBase():
     self.AllData["cov"] = self.Covariance
     
     # Save to the desired pickle file
-    with open('input/default.p', 'wb') as handle:
+    with open(self.pkl_path, 'wb') as handle:
       pickle.dump(self.AllData, handle, protocol = pickle.HIGHEST_PROTOCOL)
-    print('Wrote input/default.p')
+    print('Wrote {}'.format(self.pkl_path))
 
     if self.debug_level > 0:
       print(self.AllData["design"].shape)

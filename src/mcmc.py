@@ -27,6 +27,7 @@ To restart the chain, delete (or rename) the chain HDF5 file.
 import argparse
 from contextlib import contextmanager
 import logging
+import os
 
 import emcee
 import h5py
@@ -37,7 +38,7 @@ from scipy.stats import multivariate_normal
 
 from . import init
 from .design import Design
-from .emulator import emulators
+from . import emulator
 
 def cov(
         exp_data_list, system, obs1, subobs1, obs2, subobs2,
@@ -191,13 +192,13 @@ class Chain:
     system designs have the same parameters and ranges (except for the norms).
 
     """
-    def __init__(self):
+    def __init__(self, workdir):
         
-        init.Init().Initialize(self)
-        #print(self)
+        init.Init(workdir).Initialize(self)
         
-        self.path = self.workdir / 'cache' / 'mcmc_chain.hdf'
-        self.path.parent.mkdir(exist_ok=True)
+        self.cachedir = os.path.join(self.workdir,'cache')
+        self.path = os.path.join(self.cachedir,'mcmc_chain.hdf')
+        print(self.systems)
 
         # parameter order:
         #  - normalizations (one for each system)
@@ -220,7 +221,7 @@ class Chain:
         """
 
         def keys_labels_range():
-            d = Design(self.systems[0])
+            d = Design(self.systems[0], workdir)
             klr = zip(d.keys, d.labels, d.ranges)
 
             yield from klr
@@ -286,7 +287,7 @@ class Chain:
 
         """
         return {
-            sys: emulators[sys].predict(
+            sys: emulator.Emulator.from_cache(sys, self.workdir).predict(
                 X[:, ],#[n] + self._common_indices],
                 **kwargs
             )
@@ -540,8 +541,13 @@ def main():
         '--status', type=int,
         help='number of steps between logging status'
     )
+    parser.add_argument('-o', '--output_dir', action='store',
+                        type=str, metavar='output_dir',
+                        help='output directory to write chain')
 
-    Chain().run_mcmc(**vars(parser.parse_args()))
+    
+    args = parser.parse_args()
+    Chain(args.output_dir).run_mcmc(args.nsteps, args.nburnsteps, args.nwalkers, args.status)
 
 
 if __name__ == '__main__':

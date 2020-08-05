@@ -104,12 +104,12 @@ class Design:
     project, if not completely rewritten.
 
     """
-    def __init__(self, system, npoints=500, validation=False, seed=None):
+    def __init__(self, system, workdir, npoints=500, validation=False, seed=None):
         self.system = system
         self.projectiles, self.beam_energy = parse_system(system)
         self.type = 'validation' if validation else 'main'
 
-        init.Init().Initialize(self)
+        init.Init(workdir).Initialize(self)
         #print(self)
 
        # # 5.02 TeV has ~1.2x particle production as 2.76 TeV

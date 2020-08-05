@@ -30,22 +30,21 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
   
     # Initialize base class
     super(RunAnalysis, self).__init__(config_file, model, output_dir, exclude_index, **kwargs)
-
+    
   #---------------------------------------------------------------
   # Run analysis
   #---------------------------------------------------------------
   def run_analysis(self):
   
     # Initialize data and model from files
-    self.init()
+    self.initialize()
     
     # Initialize pickled config settings
-    init.Init().Initialize(self)
+    init.Init(self.workdir).Initialize(self)
     
     # If exclude_index < 0, perform standard analysis
     if self.exclude_index < 0:
-      output_dir = os.path.join(self.output_dir, 'main')
-      self.run_single_analysis(output_dir = output_dir)
+      self.run_single_analysis()
       
     # Otherwise, hold out a specific training point from the emulator training
     else:
@@ -71,18 +70,17 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
                   len(self.AllData['design']), n_design_points - 1))
       
       # Perform analysis (with holdout and closure tests)
-      output_dir = os.path.join(self.output_dir, 'holdout/{}'.format(self.exclude_index))
-      self.run_single_analysis(output_dir = output_dir, holdout_test = True, closure_test = True)
+      self.run_single_analysis(holdout_test=True, closure_test=True)
 
       plt.close('all')
 
   #---------------------------------------------------------------
   # Run analysis
   #---------------------------------------------------------------
-  def run_single_analysis(self, output_dir = '.', holdout_test = False, closure_test = False):
+  def run_single_analysis(self, holdout_test = False, closure_test = False):
   
     # Create output dir
-    self.plot_dir = os.path.join(output_dir, 'plots')
+    self.plot_dir = os.path.join(self.workdir, 'plots')
     if not os.path.exists(self.plot_dir):
       os.makedirs(self.plot_dir)
       
@@ -90,17 +88,17 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     if self.retrain_emulator:
       # Clean cache for emulator
       for system in self.AllData["systems"]:
-          if os.path.exists('cache/emulator/' + system + ".pkl"):
-              os.remove('cache/emulator/' + system + ".pkl")
-              print('removed cache/emulator/' + system + ".pkl")
-    
+          if os.path.exists(os.path.join(self.cache_dir, '{}.pkl'.format(system))):
+              os.remove(os.path.join(self.cache_dir, '{}.pkl'.format(system)))
+              print('removed {}'.format('{}/{}.pkl'.format(self.cache_dir, system)))
+
       # Re-train emulator
-      os.system('python -m src.emulator --retrain --npc {} --nrestarts {}'.format(self.n_pc, self.n_restarts))
+      os.system('python -m src.emulator --retrain --npc {} --nrestarts {} -o {}'.format(self.n_pc, self.n_restarts, self.workdir))
     
     # Load trained emulator
-    self.EmulatorAuAu200 = emulator.Emulator.from_cache('AuAu200', self.cachedir)
-    self.EmulatorPbPb2760 = emulator.Emulator.from_cache('PbPb2760', self.cachedir)
-    self.EmulatorPbPb5020 = emulator.Emulator.from_cache('PbPb5020', self.cachedir)
+    self.EmulatorAuAu200 = emulator.Emulator.from_cache('AuAu200', self.workdir)
+    self.EmulatorPbPb2760 = emulator.Emulator.from_cache('PbPb2760', self.workdir)
+    self.EmulatorPbPb5020 = emulator.Emulator.from_cache('PbPb5020', self.workdir)
     
     # Construct plots characterizing the emulator
     self.plot_design(holdout_test = holdout_test)
@@ -116,13 +114,13 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     
     # Run MCMC
     if self.rerun_mcmc:
-      if os.path.exists('cache/mcmc_chain.hdf'):
+      if os.path.exists(os.path.join(self.cache_dir, 'mcmc_chain.hdf')):
         print('removed mcmc_chain.hdf')
-        os.remove("cache/mcmc_chain.hdf")
-      os.system('python -m src.mcmc --nwalkers {} --nburnsteps {} {}'.format(self.n_walkers, self.n_burn_steps, self.n_steps))
+        os.remove(os.path.join(self.cache_dir, 'mcmc_chain.hdf'))
+      os.system('python -m src.mcmc --nwalkers {} --nburnsteps {} -o {} {} '.format(self.n_walkers, self.n_burn_steps, self.workdir, self.n_steps))
     
     # Load MCMC chain
-    self.chain = mcmc.Chain()
+    self.chain = mcmc.Chain(self.workdir)
     self.MCMCSamples = self.chain.load()
     
     # Plot dependence of MC sampling on number of steps
@@ -149,7 +147,7 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     
     # Write result to pkl
     if holdout_test:
-      with open(os.path.join(output_dir, 'result.pkl'), 'wb') as f:
+      with open(os.path.join(self.workdir, 'result.pkl'), 'wb') as f:
         pickle.dump(self.true_raa, f)
         pickle.dump(self.emulator_raa, f)
     
@@ -384,7 +382,7 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
         ymax = np.ceil(max(np.fabs(g.y_train_).max() for g in gps))
         ylim = (-ymax, ymax)
 
-        design = Design(system)
+        design = Design(system, self.workdir)
         test_points = [r*design.min + (1 - r)*design.max for r in [.2, .5, .8]]
 
         # Loop through emulators (one per PC)
@@ -521,7 +519,7 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
 
 ##################################################################
 if __name__ == '__main__':
-  
+
     # Define arguments
     parser = argparse.ArgumentParser(description='Jetscape STAT analysis')
     parser.add_argument('-c', '--configFile', action='store',
@@ -550,7 +548,7 @@ if __name__ == '__main__':
     if not os.path.exists(args.configFile):
       print('File \"{0}\" does not exist! Exiting!'.format(args.configFile))
       sys.exit(0)
-    
+
     analysis = RunAnalysis(config_file=args.configFile, model=args.model,
                            output_dir=args.outputdir, exclude_index=args.excludeIndex)
     analysis.run_model()

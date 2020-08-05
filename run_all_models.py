@@ -21,6 +21,11 @@ class RunAllModels():
     self.output_dir = output_dir
     self.exclude_index = exclude_index
     
+    if exclude_index < 0:
+        self.subdir = 'main'
+    else:
+        self.subdir =  'holdout/{}'.format(exclude_index)
+    
     # Read config file
     with open(config_file, 'r') as stream:
       config = yaml.safe_load(stream)
@@ -34,18 +39,21 @@ class RunAllModels():
   
     for model in self.models:
     
-      # Clear previous config file (work around janky __init__ design)
-      if os.path.exists('input/default.p'):
-        os.system('rm input/default.p')
-        print('removed default.p')
+      # Set path to default.p
+      pkl_path = os.path.join(model,'{}/default.p'.format(self.subdir))
+    
+      # Clear previous default.p (work around janky __init__ design)
+      if os.path.exists(pkl_path):
+        os.system('rm {}'.format(pkl_path))
+        print('removed {}'.format(pkl_path))
       else:
-        print('default.p does not exist')
+        print('{} does not exist'.format(pkl_path))
         
       # Write a new default.p (must be done before I can call the analysis script...)
       init = run_analysis_base.RunAnalysisBase(self.config_file, model,
                                                self.output_dir, self.exclude_index)
       init.init_model_type()
-      init.init()
+      init.initialize()
         
       # Run analysis
       os.system('python run_analysis.py -c {} -m {} -o {} -i {}'.format(self.config_file, model,

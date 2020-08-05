@@ -9,7 +9,7 @@ class Init():
   #---------------------------------------------------------------
   # Constructor
   #---------------------------------------------------------------
-  def __init__(self, workdir = '.', **kwargs):
+  def __init__(self, workdir, **kwargs):
 
     print('Init class created.')
     
@@ -27,7 +27,7 @@ class Init():
     obj.cachedir = self.cachedir
     obj.cachedir.mkdir(parents=True, exist_ok=True)
 
-    obj.AllData = pickle.load((obj.workdir / 'input/default.p').open('rb'))
+    obj.AllData = pickle.load((obj.workdir / 'default.p').open('rb'))
 
     #: Sets the collision systems for the entire project,
     #: where each system is a string of the form
@@ -99,7 +99,7 @@ class Init():
   #---------------------------------------------------------------
   def systems(self):
 
-    AllData = pickle.load((self.workdir / 'input/default.p').open('rb'))
+    AllData = pickle.load((self.workdir / 'default.p').open('rb'))
 
     #: Sets the collision systems for the entire project,
     #: where each system is a string of the form
