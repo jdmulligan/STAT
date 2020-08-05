@@ -15,7 +15,7 @@ else
 fi
 
 # Define output path from relevant sub-path of input file
-OUTPUT_DIR="/rstorage/james/qhat/$JOB_ID/$TASK_ID"
+OUTPUT_DIR="/rstorage/james/qhat/$JOB_ID"
 mkdir -p $OUTPUT_DIR
 
 # Run python script via pipenv
