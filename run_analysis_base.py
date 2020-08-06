@@ -89,23 +89,27 @@ class RunAnalysisBase():
     
     # Set model parameter ranges
     # For Matter or LBT: (A, B, C, D)
-    # For Matter+LBT 1,2: (A, C, B, D, Q), i.e. transformed versions of {A+C, A/(A+C), B, D, Q} from .dat
+    # For Matter+LBT 1: (A, C, B, D, Q), i.e. transformed versions of {A+C, A/(A+C), B, D, Q} from .dat
+    # For Matter+LBT 2: (A, C, D, Q), i.e. transformed versions of {A+C, A/(A+C), D, Q} from .dat
     if self.model == 'MATTER':
-      self.ranges = [(0.01, 2), (0.01, 20), (0.01, 2), (0.01, 20)]
+      self.ranges = [(0, 2), (0, 20), (0, 2), (0, 20)]
     elif self.model == 'LBT':
-      self.ranges = [(0.01, 2), (0.01, 20), (0.01, 2), (0.01, 20)]
+      self.ranges = [(0, 2), (0, 20), (0, 2), (0, 20)]
     elif self.model == 'MATTER+LBT1':
-      self.ranges = [(0, 1.5), (0, 1.0), (0, 20), (0, 20), (1, 4)]
+      self.ranges = [(0, 1.5), (0, 1.5), (0, 20), (0, 20), (1, 4)]
     elif self.model == 'MATTER+LBT2':
-      self.ranges = [(0, 1.5), (0, 1.0), (0, 20), (1, 4)]
+      self.ranges = [(0, 2.0), (0, 2.0), (0, 20), (1, 4)]
     self.Ranges = np.array(self.ranges).T
       
     if self.model == 'MATTER' or self.model == 'LBT':
       self.Names = [r"$A$", r"$B$", r"$C$", r"$D$"]
       self.Names_untransformed = self.Names
-    else:
+    elif self.model == 'MATTER+LBT1':
       self.Names = [r"$A$", r"$C$", r"$B$", r"$D$", r"$Q$"]
       self.Names_untransformed = [r"$A+C$", r"$A/(A+C)$", r"$B$", r"$D$", r"$Q$"]
+    elif self.model == 'MATTER+LBT2':
+      self.Names = [r"$A$", r"$C$", r"$D$", r"$Q$"]
+      self.Names_untransformed = [r"$A+C$", r"$A/(A+C)$", r"$D$", r"$Q$"]
  
   #---------------------------------------------------------------
   # Run user-defined function

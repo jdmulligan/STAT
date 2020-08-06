@@ -45,6 +45,9 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
         # Initialize pickled config settings
         init.Init(self.workdir).Initialize(self)
     
+        # Store list of closure test result
+        qhat_closure_list = []
+    
         # Store a list of the chi2 of the holdout residual
         self.avg_residuals = []
 
@@ -64,16 +67,48 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
                 
                 # Closure test
                 T_array = result_dict['T_array']
-                qhat = result_dict['qhat']                          # Truth
-                mean = result_dict['mean']                          # Extracted mean
-                qhat_posteriors = result_dict['qhat_posteriors']    # Extracted posteriors
+                qhat = result_dict['qhat_truth']
+                mean = result_dict['qhat_mean']
+                qhat_closure = result_dict['qhat_closure']
+                
+                qhat_closure_list.append(qhat_closure)
 
-            # Plot summary of holdout tests
-            #self.plot_avg_residuals()
-            #self.plot_emulator_validation()
 
-            # Plot summary of closure tests
-            # ...
+        # Plot summary of holdout tests
+        #self.plot_avg_residuals()
+        #self.plot_emulator_validation()
+
+        # Plot summary of closure tests
+        self.plot_closure_summary(T_array, qhat_closure_list)
+
+    #---------------------------------------------------------------
+    # Plot summary of closure tests
+    #---------------------------------------------------------------
+    def plot_closure_summary(self, T_array, qhat_closure_list):
+    
+        # qhat_closure_list is a list (per design point) of lists (of T values)
+        # Generate a new list: average value per T
+        qhat_closure_fraction = [1.*sum([qhat_list[i] for qhat_list in qhat_closure_list])/len(qhat_closure_list) for i,T in enumerate(T_array)]
+        
+        # Plot fraction of closure tests contained in 90% credible region
+        plt.plot(T_array, qhat_closure_fraction, sns.xkcd_rgb['pale red'],
+                 linewidth=2., label='Fraction of closure tests contained in 90% CR')
+        plt.xlabel('T (GeV)')
+        plt.ylabel('Fraction')
+        
+        ymin = 0.5
+        ymax = 1.2
+        axes = plt.gca()
+        axes.set_ylim([ymin, ymax])
+        
+        # Draw legend
+        first_legend = plt.legend(title=self.model, title_fontsize=15,
+                                  loc='upper right', fontsize=12)
+        ax = plt.gca().add_artist(first_legend)
+        
+        # Save
+        plt.savefig('{}/Closure_Summary_{}.pdf'.format(self.plot_dir, self.model), dpi = 192)
+        plt.close('all')
 
     #---------------------------------------------------------------
     # Plot emulator validation
