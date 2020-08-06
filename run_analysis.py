@@ -11,6 +11,7 @@ import seaborn as sns
 import numpy as np
 import pandas as pd
 import scipy
+import pymc3
 
 import os
 import sys
@@ -198,21 +199,16 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
              linewidth=2., linestyle='--', label='Extracted mean')
              
     # Get credible interval for each T
-    # Note: use stdev rather than stderr,
-    #std_err_list = [scipy.stats.sem(qhat_values) for qhat_values in qhat_posteriors]
-    std_err_list = [np.std(qhat_values) for qhat_values in qhat_posteriors]
+    # Specifically: highest posterior density interval (HPDI) via pymc3
     confidence = 0.9
-    n = len(qhat_posteriors[0])
-    q = scipy.stats.t.ppf((1 + confidence) / 2, n - 1)
-    h = [q*std_err for std_err in std_err_list]
-          
-    err_low = np.array(qhat_mean) - np.array(h)
-    err_up =  np.array(qhat_mean) + np.array(h)
-    plt.fill_between(T_array, err_low, err_up, color=sns.xkcd_rgb['light blue'],
+    h = [pymc3.stats.hpd(np.array(qhat_values), confidence) for qhat_values in qhat_posteriors]    
+    credible_low = [i[0] for i in h]
+    credible_up =  [i[1] for i in h]
+    plt.fill_between(T_array, credible_low, credible_up, color=sns.xkcd_rgb['light blue'],
                      label='{}% Credible Interval'.format(int(confidence*100)))
                      
     # Store whether truth value is contained within credible region
-    qhat_closure = [((qhat_truth[i] < err_up[i]) and (qhat_truth[i] > err_low[i])) for i,T in enumerate(T_array)]
+    qhat_closure = [((qhat_truth[i] < credible_up[i]) and (qhat_truth[i] > credible_low[i])) for i,T in enumerate(T_array)]
              
     # Draw legend
     first_legend = plt.legend(title=self.model, title_fontsize=15,
@@ -274,7 +270,6 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
 
             if i<j:
                 ax.axis('off')
-    plt.tight_layout(True)
     plt.savefig('{}/DesignPoints.pdf'.format(self.plot_dir), dpi = 192)
     plt.close('all')
     
@@ -310,7 +305,6 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
                 axes[s1][s2].plot(DX, y, 'b-', alpha=0.1, label="Posterior" if i==0 else '')
             axes[s1][s2].errorbar(DX, DY, yerr = DE, fmt='ro', label="Measurements")
 
-    plt.tight_layout(True)
     figure.savefig('{}/RAA_{}.pdf'.format(self.plot_dir, name), dpi = 192)
     plt.close('all')
 
@@ -374,7 +368,6 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     
               axes[s1][s2].plot(model_x, deltaRAA, 'b-', alpha=0.1, label="Posterior" if i==0 else '')
 
-    plt.tight_layout(True)
     figure.savefig('{}/RAA_Residuals_Design.pdf'.format(self.plot_dir), dpi = 192)
     plt.close('all')
     
@@ -426,7 +419,6 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
                     ax.plot(x, mean, lw=.2, color=color, zorder=30)
                     ax.fill_between(x, mean - std, mean + std, lw=0, color=color, alpha=.3, zorder=20)
                     
-        plt.tight_layout(True)
         plt.savefig('{}/EmulatorPCs_{}.pdf'.format(self.plot_dir, system), dpi = 192)
         plt.close('all')
 
@@ -445,7 +437,6 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
       for i, ax in enumerate(axes):
         for j in range(0, W):
           ax.plot(range(0, S, T), d[j, ::T, i], alpha = A)
-      plt.tight_layout(True)
       plt.savefig('{}/MCMCSamples.pdf'.format(self.plot_dir), dpi = 192)
       plt.close('all')
 
@@ -489,7 +480,6 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
 
             if i<j:
                 ax.axis('off')
-    plt.tight_layout(True)
     plt.savefig('{}/Posterior_Correlations{}.pdf'.format(self.plot_dir, suffix), dpi = 192)
     plt.close('all')
 
@@ -526,7 +516,6 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
                 ax.set_ylim(*self.Ranges[:,i])
             if i<j:
                 ax.axis('off')
-    plt.tight_layout(True)
     plt.savefig('{}/Average_Residuals.pdf'.format(self.plot_dir), dpi = 192)
     plt.close('all')
 
