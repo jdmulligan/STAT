@@ -175,8 +175,8 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     T_array = np.linspace(0.16, 0.5)
       
     # Plot truth value
-    qhat = [self.qhat(T=T, E=E, parameters=self.AllData['holdout_design']) for T in T_array]
-    plt.plot(T_array, qhat, sns.xkcd_rgb['pale red'],
+    qhat_truth = [self.qhat(T=T, E=E, parameters=self.AllData['holdout_design']) for T in T_array]
+    plt.plot(T_array, qhat_truth, sns.xkcd_rgb['pale red'],
              linewidth=2., label='Truth')
     plt.xlabel('T (GeV)')
     plt.ylabel(r'$\hat{q}/T^3$')
@@ -186,18 +186,18 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     axes = plt.gca()
     axes.set_ylim([ymin, ymax])
     
-    # Plot 90% confidence interval of qhat solution
+    # Plot 90% credible interval of qhat solution
     # --> Construct distribution of qhat by sampling each ABCD point
     qhat_posteriors = [[self.qhat(T=T, E=E, parameters=parameters)
                         for parameters in self.TransformedSamples]
                         for T in T_array]
     
     # Get list of mean qhat values for each T
-    mean = [np.mean(qhat_values) for qhat_values in qhat_posteriors]
-    plt.plot(T_array, mean, sns.xkcd_rgb['denim blue'],
-             linewidth=2., linestyle='--', label='Extracted')
+    qhat_mean = [np.mean(qhat_values) for qhat_values in qhat_posteriors]
+    plt.plot(T_array, qhat_mean, sns.xkcd_rgb['denim blue'],
+             linewidth=2., linestyle='--', label='Extracted mean')
              
-    # Get confidence interval for each T
+    # Get credible interval for each T
     # Note: use stdev rather than stderr,
     #std_err_list = [scipy.stats.sem(qhat_values) for qhat_values in qhat_posteriors]
     std_err_list = [np.std(qhat_values) for qhat_values in qhat_posteriors]
@@ -206,10 +206,13 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     q = scipy.stats.t.ppf((1 + confidence) / 2, n - 1)
     h = [q*std_err for std_err in std_err_list]
           
-    err_low = np.array(mean) - np.array(h)
-    err_up =  np.array(mean) + np.array(h)
+    err_low = np.array(qhat_mean) - np.array(h)
+    err_up =  np.array(qhat_mean) + np.array(h)
     plt.fill_between(T_array, err_low, err_up, color=sns.xkcd_rgb['light blue'],
-                     label='{}% Confidence Interval'.format(int(confidence*100)))
+                     label='{}% Credible Interval'.format(int(confidence*100)))
+                     
+    # Store whether truth value is contained within credible region
+    qhat_closure = [((qhat_truth[i] < err_up[i]) and (qhat_truth[i] > err_low[i])) for i,T in enumerate(T_array)]
              
     # Draw legend
     first_legend = plt.legend(title=self.model, title_fontsize=15,
@@ -230,9 +233,9 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     
     # Write result to pkl
     self.output_dict['T_array'] = T_array
-    self.output_dict['qhat'] = qhat                         # Truth
-    self.output_dict['mean'] = mean                         # Extracted mean
-    self.output_dict['qhat_posteriors'] = qhat_posteriors   # Extracted posteriors
+    self.output_dict['qhat_truth'] = qhat_truth             # Truth
+    self.output_dict['qhat_mean'] = qhat_mean               # Extracted mean
+    self.output_dict['qhat_closure'] = qhat_closure   # Extracted posteriors
     
   #---------------------------------------------------------------
   # Plot design points
