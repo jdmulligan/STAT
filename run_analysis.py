@@ -151,6 +151,9 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     sample_points = self.MCMCSamples[ np.random.choice(range(len(self.MCMCSamples)), 100), :]
     self.plot_RAA(sample_points, 'Posterior')
     
+    if not holdout_test and not closure_test:
+        self.plot_qhat()
+    
     plt.close('all')
     
     # Write result to pkl
@@ -167,7 +170,49 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
       pickle.dump(self.output_dict, f)
       
     plt.close('all')
+ 
+  #---------------------------------------------------------------
+  # Plot qhat/T^3 for the holdout point
+  #---------------------------------------------------------------
+  def plot_qhat(self, E=100.):
+  
+    T_array = np.linspace(0.16, 0.5)
+  
+    # Plot 90% credible interval of qhat solution
+    # --> Construct distribution of qhat by sampling each ABCD point
+    qhat_posteriors = [[self.qhat(T=T, E=E, parameters=parameters)
+                        for parameters in self.TransformedSamples]
+                        for T in T_array]
+  
+    # Get list of mean qhat values for each T
+    qhat_mean = [np.mean(qhat_values) for qhat_values in qhat_posteriors]
+    plt.plot(T_array, qhat_mean, sns.xkcd_rgb['denim blue'],
+             linewidth=2., linestyle='--', label='Mean')
+    plt.xlabel('T (GeV)')
+    plt.ylabel(r'$\hat{q}/T^3$')
     
+    ymin = 0
+    ymax = 2*max(qhat_mean)
+    axes = plt.gca()
+    axes.set_ylim([ymin, ymax])
+  
+    # Get credible interval for each T
+    # Specifically: highest posterior density interval (HPDI) via pymc3
+    confidence = 0.9
+    h = [pymc3.stats.hpd(np.array(qhat_values), confidence) for qhat_values in qhat_posteriors]
+    credible_low = [i[0] for i in h]
+    credible_up =  [i[1] for i in h]
+    plt.fill_between(T_array, credible_low, credible_up, color=sns.xkcd_rgb['light blue'],
+                     label='{}% Credible Interval'.format(int(confidence*100)))
+  
+    # Draw legend
+    first_legend = plt.legend(title=self.model, title_fontsize=15,
+                             loc='upper right', fontsize=12)
+    ax = plt.gca().add_artist(first_legend)
+
+    plt.savefig('{}/qhat.pdf'.format(self.plot_dir), dpi = 192)
+    plt.close('all')
+ 
   #---------------------------------------------------------------
   # Plot qhat/T^3 for the holdout point
   #---------------------------------------------------------------
@@ -183,7 +228,7 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     plt.ylabel(r'$\hat{q}/T^3$')
     
     ymin = 0
-    ymax = 10
+    ymax = 2*max(qhat_truth)
     axes = plt.gca()
     axes.set_ylim([ymin, ymax])
     
@@ -201,7 +246,7 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     # Get credible interval for each T
     # Specifically: highest posterior density interval (HPDI) via pymc3
     confidence = 0.9
-    h = [pymc3.stats.hpd(np.array(qhat_values), confidence) for qhat_values in qhat_posteriors]    
+    h = [pymc3.stats.hpd(np.array(qhat_values), confidence) for qhat_values in qhat_posteriors]
     credible_low = [i[0] for i in h]
     credible_up =  [i[1] for i in h]
     plt.fill_between(T_array, credible_low, credible_up, color=sns.xkcd_rgb['light blue'],
