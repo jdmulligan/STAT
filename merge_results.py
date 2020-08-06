@@ -44,13 +44,18 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
         
         # Initialize pickled config settings
         init.Init(self.workdir).Initialize(self)
-    
-        # Store list of closure test result
-        qhat_closure_list = []
-    
+        
+        # Emulator validation: Store lists of true RAA, emulator RAA at each holdout point
+        SystemCount = len(self.AllData["systems"])
+        true_raa_aggregated = [[] for i in range(SystemCount)]
+        emulator_raa_aggregated = [[] for i in range(SystemCount)]
+
         # Store a list of the chi2 of the holdout residual
         self.avg_residuals = []
 
+        # Store list of closure test result
+        qhat_closure_list = []
+    
         n_design_points = len(next(os.walk(self.output_dir_holdout))[1])
         print('iterating through {} results'.format(n_design_points))
         for i in range(0, n_design_points):
@@ -65,6 +70,9 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
                 true_raa = result_dict['true_raa']
                 emulator_raa = result_dict['emulator_raa']
                 
+                [[true_raa_aggregated[i].append(raa) for raa in true_raa[i]] for i in range(SystemCount)]
+                [[emulator_raa_aggregated[i].append(raa) for raa in emulator_raa[i]] for i in range(SystemCount)]
+                
                 # Closure test
                 T_array = result_dict['T_array']
                 qhat = result_dict['qhat_truth']
@@ -76,7 +84,7 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
 
         # Plot summary of holdout tests
         #self.plot_avg_residuals()
-        #self.plot_emulator_validation()
+        self.plot_emulator_validation(true_raa_aggregated, emulator_raa_aggregated)
 
         # Plot summary of closure tests
         self.plot_closure_summary(T_array, qhat_closure_list)
@@ -107,13 +115,13 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
         ax = plt.gca().add_artist(first_legend)
         
         # Save
-        plt.savefig('{}/Closure_Summary_{}.pdf'.format(self.plot_dir, self.model), dpi = 192)
+        plt.savefig('{}/Closure_Summary.pdf'.format(self.plot_dir, self.model), dpi = 192)
         plt.close('all')
 
     #---------------------------------------------------------------
     # Plot emulator validation
     #---------------------------------------------------------------
-    def plot_emulator_validation(self):
+    def plot_emulator_validation(self, true_raa, emulator_raa):
 
         # Construct a figure with two plots
         plt.figure(1, figsize=(10, 6))
@@ -121,7 +129,8 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
         ax_residual = plt.axes([0.81, 0.13, 0.15, 0.8])
 
         # Loop through emulators
-        for i in range(self.SystemCount):
+        SystemCount = len(self.AllData["systems"])
+        for i in range(SystemCount):
     
             system = self.AllData['systems'][i]
             if 'AuAu' in system:
@@ -135,25 +144,25 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
             color = sns.color_palette('colorblind')[i]
 
             # Get RAA points
-            true_raa = np.array(self.true_raa[i])
-            emulator_raa = np.array(self.emulator_raa[i])
-            normalized_residual = np.divide(true_raa-emulator_raa, true_raa)
+            true_raa_i = np.array(true_raa[i])
+            emulator_raa_i = np.array(emulator_raa[i])
+            normalized_residual_i = np.divide(true_raa_i-emulator_raa_i, true_raa_i)
 
             # Draw scatter plot
-            ax_scatter.scatter(true_raa, emulator_raa, s=1,
+            ax_scatter.scatter(true_raa_i, emulator_raa_i, s=1,
                                color=color, label=system_label)
             ax_scatter.set_xlabel(r'$R_{AA}^{true}$', fontsize=18)
             ax_scatter.set_ylabel(r'$R_{AA}^{emulator}$', fontsize=18)
             ax_scatter.legend(title=self.model, title_fontsize=22,
                               loc='upper left', fontsize=18, markerscale=10)
           
-        # Draw normalization residuals
-        max = 0.5
-        bins = np.linspace(-max, max)
-        ax_residual.hist(normalized_residual, color=color, histtype='step',
-                         orientation='horizontal', linewidth=3, density=True, bins=bins)
-        ax_residual.set_ylabel(r'$\left(R_{AA}^{true} - R_{AA}^{emulator}\right) / R_{AA}^{true}$',
-                               fontsize=16)
+            # Draw normalization residuals
+            max = 0.5
+            bins = np.linspace(-max, max)
+            ax_residual.hist(normalized_residual_i, color=color, histtype='step',
+                             orientation='horizontal', linewidth=3, density=True, bins=bins)
+            ax_residual.set_ylabel(r'$\left(R_{AA}^{true} - R_{AA}^{emulator}\right) / R_{AA}^{true}$',
+                                   fontsize=16)
           
         plt.savefig('{}/EmulatorValidation.pdf'.format(self.plot_dir))
         plt.close('all')
