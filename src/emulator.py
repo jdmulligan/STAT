@@ -119,18 +119,12 @@ class Emulator:
         
         kernel_matern = kernels.Matern(length_scale=ptp,
                                        nu=2.5,
-                                       length_scale_bounds=np.outer(ptp, (1e-3, 1e3))
+                                       length_scale_bounds=(np.outer(ptp, (0.1, 10)))
                                        )
-        noise0 =  0.49**2
-        noisemin = 0.00001**2
-        noisemax = 0.5**2
-        
-        noise = -1
-        if noise > 0:
-            noise0 = noise**2
-            noisemin = noise**2 * 0.999
-            noisemax = noise**2 * 1.001
-            
+                                       
+        noise0 = 0.5**2
+        noisemin = 0.01**2
+        noisemax = 1**2
         kernel_noise = kernels.WhiteKernel(noise_level=noise0,
                                            noise_level_bounds=(noisemin, noisemax)
                                            )

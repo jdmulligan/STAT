@@ -129,8 +129,8 @@ class RunAnalysisBase():
   
     if self.model == 'MATTER+LBT1':
       A = parameters[0]
-      B = parameters[1]
-      C = parameters[2]
+      B = parameters[2]
+      C = parameters[1]
       D = parameters[3]
       Q0 = parameters[4]
       term1 = A * (np.log(E/Lambda) - np.log(B)) / np.square(np.log(E/Lambda))  * np.heaviside(E-Q0, 0.)
@@ -142,7 +142,7 @@ class RunAnalysisBase():
       Q0 = parameters[3]
       term1 = A * (np.log(E/Lambda) - np.log(Q0/Lambda)) / np.square(np.log(E/Lambda)) * np.heaviside(E-Q0, 0.)
       term2 = C * (np.log(E/T) - np.log(D)) / np.square(np.log(E*T/(Lambda*Lambda)))
-    else:
+    elif self.model in ['LBT', 'MATTER']:
       A = parameters[0]
       B = parameters[1]
       C = parameters[2]
@@ -193,17 +193,24 @@ class RunAnalysisBase():
                                        "C1": {"Y": self.RawPrediction6["Prediction"], "x": self.RawData6["Data"]['x']}}}}
 
     # Covariance matrices - the indices are [system][measurement1][measurement2], each one is a block of matrix
+    SysLength = {"sys,lumi,high": 9999, "sys,TAA,high": 9999, "default": 0.2}
     self.Covariance = reader.InitializeCovariance(self.Data)
-    self.Covariance["AuAu200"][("R_AA", "C0")][("R_AA", "C0")] = reader.EstimateCovariance(self.RawData1, self.RawData1, SysLength = {"default": 0.2})
-    self.Covariance["AuAu200"][("R_AA", "C1")][("R_AA", "C1")] = reader.EstimateCovariance(self.RawData2, self.RawData2, SysLength = {"default": 0.2})
-    self.Covariance["PbPb2760"][("R_AA", "C0")][("R_AA", "C0")] = reader.EstimateCovariance(self.RawData3, self.RawData3, SysLength = {"default": 0.2})
-    self.Covariance["PbPb2760"][("R_AA", "C1")][("R_AA", "C1")] = reader.EstimateCovariance(self.RawData4, self.RawData4, SysLength = {"default": 0.2})
-    self.Covariance["PbPb5020"][("R_AA", "C0")][("R_AA", "C0")] = reader.EstimateCovariance(self.RawData5, self.RawData5, SysLength = {"default": 0.2})
-    self.Covariance["PbPb5020"][("R_AA", "C1")][("R_AA", "C1")] = reader.EstimateCovariance(self.RawData6, self.RawData6, SysLength = {"default": 0.2})
-
-    # This is how we can add off-diagonal matrices
-    # Covariance["PbPb5020"][("R_AA", "C0")][("R_AA", "C1")] = reader.EstimateCovariance(RawData5, RawData6, SysLength = {"default": 100}, SysStrength = {"default": 0.1})
-    # Covariance["PbPb5020"][("R_AA", "C1")][("R_AA", "C0")] = reader.EstimateCovariance(RawData6, RawData5, SysLength = {"default": 100}, SysStrength = {"default": 0.1})
+    
+    # Diagonal terms
+    self.Covariance["AuAu200"][("R_AA", "C0")][("R_AA", "C0")]  = reader.EstimateCovariance(self.RawData1, self.RawData1, SysLength=SysLength)
+    self.Covariance["AuAu200"][("R_AA", "C1")][("R_AA", "C1")]  = reader.EstimateCovariance(self.RawData2, self.RawData2, SysLength=SysLength)
+    self.Covariance["PbPb2760"][("R_AA", "C0")][("R_AA", "C0")] = reader.EstimateCovariance(self.RawData3, self.RawData3, SysLength=SysLength)
+    self.Covariance["PbPb2760"][("R_AA", "C1")][("R_AA", "C1")] = reader.EstimateCovariance(self.RawData4, self.RawData4, SysLength=SysLength)
+    self.Covariance["PbPb5020"][("R_AA", "C0")][("R_AA", "C0")] = reader.EstimateCovariance(self.RawData5, self.RawData5, SysLength=SysLength)
+    self.Covariance["PbPb5020"][("R_AA", "C1")][("R_AA", "C1")] = reader.EstimateCovariance(self.RawData6, self.RawData6, SysLength=SysLength)
+    
+    # Off-diagonal terms
+    self.Covariance["AuAu200"][("R_AA", "C0")][("R_AA", "C1")]  = reader.EstimateCovariance(self.RawData1, self.RawData2, SysLength = {"sys,lumi,high": 9999, "default": -1}, SysStrength = {"sys,lumi,high": 1, "default": 0})
+    self.Covariance["AuAu200"][("R_AA", "C1")][("R_AA", "C0")]  = reader.EstimateCovariance(self.RawData2, self.RawData1, SysLength = {"sys,lumi,high": 9999, "default": -1}, SysStrength = {"sys,lumi,high": 1, "default": 0})
+    self.Covariance["PbPb2760"][("R_AA", "C0")][("R_AA", "C1")] = reader.EstimateCovariance(self.RawData3, self.RawData4, SysLength = {"sys,lumi,high": 9999, "default": -1}, SysStrength = {"sys,lumi,high": 1, "default": 0})
+    self.Covariance["PbPb2760"][("R_AA", "C1")][("R_AA", "C0")] = reader.EstimateCovariance(self.RawData4, self.RawData3, SysLength = {"sys,lumi,high": 9999, "default": -1}, SysStrength = {"sys,lumi,high": 1, "default": 0})
+    self.Covariance["PbPb5020"][("R_AA", "C0")][("R_AA", "C1")] = reader.EstimateCovariance(self.RawData5, self.RawData6, SysLength = {"sys,lumi,high": 9999, "default": -1}, SysStrength = {"sys,lumi,high": 1, "default": 0})
+    self.Covariance["PbPb5020"][("R_AA", "C1")][("R_AA", "C0")] = reader.EstimateCovariance(self.RawData6, self.RawData5, SysLength = {"sys,lumi,high": 9999, "default": -1}, SysStrength = {"sys,lumi,high": 1, "default": 0})
 
     # This is how we can supply external pre-generated matrices
     # Covariance["AuAu200"][("R_AA", "C0")][("R_AA", "C0")] = RawCov1["Matrix"]
@@ -305,12 +312,12 @@ class RunAnalysisBase():
   
     # Read data files
     if self.model == 'MATTER':
-      self.RawData1   = reader.ReadData('input/MATTER/Data_PHENIX_AuAu200_RAACharged_0to10_2013.dat')
-      self.RawData2   = reader.ReadData('input/MATTER/Data_PHENIX_AuAu200_RAACharged_40to50_2013.dat')
-      self.RawData3   = reader.ReadData('input/MATTER/Data_ATLAS_PbPb2760_RAACharged_0to5_2015.dat')
-      self.RawData4   = reader.ReadData('input/MATTER/Data_ATLAS_PbPb2760_RAACharged_30to40_2015.dat')
-      self.RawData5   = reader.ReadData('input/MATTER/Data_CMS_PbPb5020_RAACharged_0to10_2017.dat')
-      self.RawData6   = reader.ReadData('input/MATTER/Data_CMS_PbPb5020_RAACharged_30to50_2017.dat')
+      self.RawData1   = reader.ReadData('input/MATTERTruncated/Data_PHENIX_AuAu200_RAACharged_0to10_2013.dat')
+      self.RawData2   = reader.ReadData('input/MATTERTruncated/Data_PHENIX_AuAu200_RAACharged_40to50_2013.dat')
+      self.RawData3   = reader.ReadData('input/MATTERTruncated/Data_ATLAS_PbPb2760_RAACharged_0to5_2015.dat')
+      self.RawData4   = reader.ReadData('input/MATTERTruncated/Data_ATLAS_PbPb2760_RAACharged_30to40_2015.dat')
+      self.RawData5   = reader.ReadData('input/MATTERTruncated/Data_CMS_PbPb5020_RAACharged_0to10_2017.dat')
+      self.RawData6   = reader.ReadData('input/MATTERTruncated/Data_CMS_PbPb5020_RAACharged_30to50_2017.dat')
     elif self.model == 'LBT':
       self.RawData1   = reader.ReadData('input/LBT/Data_PHENIX_AuAu200_RAACharged_0to10_2013.dat')
       self.RawData2   = reader.ReadData('input/LBT/Data_PHENIX_AuAu200_RAACharged_40to50_2013.dat')
@@ -345,7 +352,7 @@ class RunAnalysisBase():
 
     # Read design points
     if self.model == 'MATTER':
-      self.RawDesign = reader.ReadDesign('input/MATTER/Design.dat')
+      self.RawDesign = reader.ReadDesign('input/MATTERTruncated/Design.dat')
     elif self.model == 'LBT':
       self.RawDesign = reader.ReadDesign('input/LBT/Design.dat')
     elif self.model == 'MATTER+LBT1':
@@ -355,12 +362,12 @@ class RunAnalysisBase():
 
     # Read model prediction
     if self.model == 'MATTER':
-      self.RawPrediction1   = reader.ReadPrediction('input/MATTER/Prediction_PHENIX_AuAu200_RAACharged_0to10_2013.dat')
-      self.RawPrediction2   = reader.ReadPrediction('input/MATTER/Prediction_PHENIX_AuAu200_RAACharged_40to50_2013.dat')
-      self.RawPrediction3   = reader.ReadPrediction('input/MATTER/Prediction_ATLAS_PbPb2760_RAACharged_0to5_2015.dat')
-      self.RawPrediction4   = reader.ReadPrediction('input/MATTER/Prediction_ATLAS_PbPb2760_RAACharged_30to40_2015.dat')
-      self.RawPrediction5   = reader.ReadPrediction('input/MATTER/Prediction_CMS_PbPb5020_RAACharged_0to10_2017.dat')
-      self.RawPrediction6   = reader.ReadPrediction('input/MATTER/Prediction_CMS_PbPb5020_RAACharged_30to50_2017.dat')
+      self.RawPrediction1   = reader.ReadPrediction('input/MATTERTruncated/Prediction_PHENIX_AuAu200_RAACharged_0to10_2013.dat')
+      self.RawPrediction2   = reader.ReadPrediction('input/MATTERTruncated/Prediction_PHENIX_AuAu200_RAACharged_40to50_2013.dat')
+      self.RawPrediction3   = reader.ReadPrediction('input/MATTERTruncated/Prediction_ATLAS_PbPb2760_RAACharged_0to5_2015.dat')
+      self.RawPrediction4   = reader.ReadPrediction('input/MATTERTruncated/Prediction_ATLAS_PbPb2760_RAACharged_30to40_2015.dat')
+      self.RawPrediction5   = reader.ReadPrediction('input/MATTERTruncated/Prediction_CMS_PbPb5020_RAACharged_0to10_2017.dat')
+      self.RawPrediction6   = reader.ReadPrediction('input/MATTERTruncated/Prediction_CMS_PbPb5020_RAACharged_30to50_2017.dat')
     elif self.model == 'LBT':
       self.RawPrediction1   = reader.ReadPrediction('input/LBT/Prediction_PHENIX_AuAu200_RAACharged_0to10_2013.dat')
       self.RawPrediction2   = reader.ReadPrediction('input/LBT/Prediction_PHENIX_AuAu200_RAACharged_40to50_2013.dat')
