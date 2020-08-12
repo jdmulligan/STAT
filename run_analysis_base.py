@@ -96,9 +96,9 @@ class RunAnalysisBase():
     elif self.model == 'LBT':
       self.ranges = [(0, 2), (0, 20), (0, 2), (0, 20)]
     elif self.model == 'MATTER+LBT1':
-      self.ranges = [(0, 1.5), (0, 1.5), (0, 20), (0, 20), (1, 4)]
+      self.ranges = [(0, 1.5), (0, 1), (0, 20), (0, 20), (1, 4)]
     elif self.model == 'MATTER+LBT2':
-      self.ranges = [(0, 2.0), (0, 2.0), (0, 20), (1, 4)]
+      self.ranges = [(0, 1.5), (0, 1), (0, 20), (1, 4)]
     self.Ranges = np.array(self.ranges).T
       
     if self.model == 'MATTER' or self.model == 'LBT':
@@ -126,7 +126,7 @@ class RunAnalysisBase():
     C_R = 4./3.
     coeff = 42 * C_R * scipy.special.zeta(3) / np.pi * np.square(4*np.pi/9)
   
-    if self.model == 'ML1':
+    if self.model == 'MATTER+LBT1':
       A = parameters[0]
       B = parameters[1]
       C = parameters[2]
@@ -134,7 +134,7 @@ class RunAnalysisBase():
       Q0 = parameters[4]
       term1 = A * (np.log(E/Lambda) - np.log(B)) / np.square(np.log(E/Lambda))  * np.heaviside(E-Q0, 0.)
       term2 = C * (np.log(E/T) - np.log(D)) / np.square(np.log(E*T/(Lambda*Lambda)))
-    elif self.model == 'ML2':
+    elif self.model == 'MATTER+LBT2':
       A = parameters[0]
       C = parameters[1]
       D = parameters[2]
@@ -311,12 +311,12 @@ class RunAnalysisBase():
       self.RawData5   = reader.ReadData('input/MATTER/Data_CMS_PbPb5020_RAACharged_0to10_2017.dat')
       self.RawData6   = reader.ReadData('input/MATTER/Data_CMS_PbPb5020_RAACharged_30to50_2017.dat')
     elif self.model == 'LBT':
-      self.RawData1   = reader.ReadData('input/LBTJake/Data_PHENIX_AuAu200_RAACharged_0to10_2013.dat')
-      self.RawData2   = reader.ReadData('input/LBTJake/Data_PHENIX_AuAu200_RAACharged_40to50_2013.dat')
-      self.RawData3   = reader.ReadData('input/LBTJake/Data_ATLAS_PbPb2760_RAACharged_0to5_2015.dat')
-      self.RawData4   = reader.ReadData('input/LBTJake/Data_ATLAS_PbPb2760_RAACharged_30to40_2015.dat')
-      self.RawData5   = reader.ReadData('input/LBTJake/Data_CMS_PbPb5020_RAACharged_0to10_2017.dat')
-      self.RawData6   = reader.ReadData('input/LBTJake/Data_CMS_PbPb5020_RAACharged_30to50_2017.dat')
+      self.RawData1   = reader.ReadData('input/LBT/Data_PHENIX_AuAu200_RAACharged_0to10_2013.dat')
+      self.RawData2   = reader.ReadData('input/LBT/Data_PHENIX_AuAu200_RAACharged_40to50_2013.dat')
+      self.RawData3   = reader.ReadData('input/LBT/Data_ATLAS_PbPb2760_RAACharged_0to5_2015.dat')
+      self.RawData4   = reader.ReadData('input/LBT/Data_ATLAS_PbPb2760_RAACharged_30to40_2015.dat')
+      self.RawData5   = reader.ReadData('input/LBT/Data_CMS_PbPb5020_RAACharged_0to10_2017.dat')
+      self.RawData6   = reader.ReadData('input/LBT/Data_CMS_PbPb5020_RAACharged_30to50_2017.dat')
     elif self.model == 'MATTER+LBT1':
       self.RawData1 = reader.ReadData('input/MATTERLBT1/Data_PHENIX_AuAu200_RAACharged_0to10_2013.dat')
       self.RawData2 = reader.ReadData('input/MATTERLBT1/Data_PHENIX_AuAu200_RAACharged_40to50_2013.dat')
@@ -332,7 +332,7 @@ class RunAnalysisBase():
       self.RawData5 = reader.ReadData('input/MATTERLBT2/Data_CMS_PbPb5020_RAACharged_0to10_2017.dat')
       self.RawData6 = reader.ReadData('input/MATTERLBT2/Data_CMS_PbPb5020_RAACharged_30to50_2017.dat')
     else:
-      sys.exit('Unknown model {}! Options are: M, L, ML1, ML2'.format(self.model))
+      sys.exit('Unknown model {}! Options are: MATTER, LBT, MATTER+LBT1, MATTER+LBT2'.format(self.model))
 
     # Read covariance
     self.RawCov11L = reader.ReadCovariance('input/LBT/Covariance_PHENIX_AuAu200_RAACharged_0to10_2013_PHENIX_AuAu200_RAACharged_0to10_2013_Jake.dat')
@@ -342,18 +342,11 @@ class RunAnalysisBase():
     self.RawCov55L = reader.ReadCovariance('input/LBT/Covariance_CMS_PbPb5020_RAACharged_0to10_2017_CMS_PbPb5020_RAACharged_0to10_2017_Jake.dat')
     self.RawCov66L = reader.ReadCovariance('input/LBT/Covariance_CMS_PbPb5020_RAACharged_30to50_2017_CMS_PbPb5020_RAACharged_30to50_2017_Jake.dat')
 
-    self.RawCov11E = reader.ReadCovariance('input/Example/Covariance_PHENIX_AuAu200_RAACharged_0to10_2013_PHENIX_AuAu200_RAACharged_0to10_2013_SmallL.dat')
-    self.RawCov22E = reader.ReadCovariance('input/Example/Covariance_PHENIX_AuAu200_RAACharged_40to50_2013_PHENIX_AuAu200_RAACharged_40to50_2013_SmallL.dat')
-    self.RawCov33E = reader.ReadCovariance('input/Example/Covariance_ATLAS_PbPb2760_RAACharged_0to5_2015_ATLAS_PbPb2760_RAACharged_0to5_2015_SmallL.dat')
-    self.RawCov44E = reader.ReadCovariance('input/Example/Covariance_ATLAS_PbPb2760_RAACharged_30to40_2015_ATLAS_PbPb2760_RAACharged_30to40_2015_SmallL.dat')
-    self.RawCov55E = reader.ReadCovariance('input/Example/Covariance_CMS_PbPb5020_RAACharged_0to10_2017_CMS_PbPb5020_RAACharged_0to10_2017_SmallL.dat')
-    self.RawCov66E = reader.ReadCovariance('input/Example/Covariance_CMS_PbPb5020_RAACharged_30to50_2017_CMS_PbPb5020_RAACharged_30to50_2017_SmallL.dat')
-
     # Read design points
     if self.model == 'MATTER':
       self.RawDesign = reader.ReadDesign('input/MATTER/Design.dat')
     elif self.model == 'LBT':
-      self.RawDesign = reader.ReadDesign('input/LBTJake/Design.dat')
+      self.RawDesign = reader.ReadDesign('input/LBT/Design.dat')
     elif self.model == 'MATTER+LBT1':
       self.RawDesign = reader.ReadDesign('input/MATTERLBT1/Design.dat')
     elif self.model == 'MATTER+LBT2':
@@ -368,12 +361,12 @@ class RunAnalysisBase():
       self.RawPrediction5   = reader.ReadPrediction('input/MATTER/Prediction_CMS_PbPb5020_RAACharged_0to10_2017.dat')
       self.RawPrediction6   = reader.ReadPrediction('input/MATTER/Prediction_CMS_PbPb5020_RAACharged_30to50_2017.dat')
     elif self.model == 'LBT':
-      self.RawPrediction1   = reader.ReadPrediction('input/LBTJake/Prediction_PHENIX_AuAu200_RAACharged_0to10_2013.dat')
-      self.RawPrediction2   = reader.ReadPrediction('input/LBTJake/Prediction_PHENIX_AuAu200_RAACharged_40to50_2013.dat')
-      self.RawPrediction3   = reader.ReadPrediction('input/LBTJake/Prediction_ATLAS_PbPb2760_RAACharged_0to5_2015.dat')
-      self.RawPrediction4   = reader.ReadPrediction('input/LBTJake/Prediction_ATLAS_PbPb2760_RAACharged_30to40_2015.dat')
-      self.RawPrediction5   = reader.ReadPrediction('input/LBTJake/Prediction_CMS_PbPb5020_RAACharged_0to10_2017.dat')
-      self.RawPrediction6   = reader.ReadPrediction('input/LBTJake/Prediction_CMS_PbPb5020_RAACharged_30to50_2017.dat')
+      self.RawPrediction1   = reader.ReadPrediction('input/LBT/Prediction_PHENIX_AuAu200_RAACharged_0to10_2013.dat')
+      self.RawPrediction2   = reader.ReadPrediction('input/LBT/Prediction_PHENIX_AuAu200_RAACharged_40to50_2013.dat')
+      self.RawPrediction3   = reader.ReadPrediction('input/LBT/Prediction_ATLAS_PbPb2760_RAACharged_0to5_2015.dat')
+      self.RawPrediction4   = reader.ReadPrediction('input/LBT/Prediction_ATLAS_PbPb2760_RAACharged_30to40_2015.dat')
+      self.RawPrediction5   = reader.ReadPrediction('input/LBT/Prediction_CMS_PbPb5020_RAACharged_0to10_2017.dat')
+      self.RawPrediction6   = reader.ReadPrediction('input/LBT/Prediction_CMS_PbPb5020_RAACharged_30to50_2017.dat')
     elif self.model == 'MATTER+LBT1':
       self.RawPrediction1 = reader.ReadPrediction('input/MATTERLBT1/Prediction_PHENIX_AuAu200_RAACharged_0to10_2013.dat')
       self.RawPrediction2 = reader.ReadPrediction('input/MATTERLBT1/Prediction_PHENIX_AuAu200_RAACharged_40to50_2013.dat')

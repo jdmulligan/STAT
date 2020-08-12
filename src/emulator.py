@@ -127,7 +127,7 @@ class Emulator:
         kernel_noise = kernels.WhiteKernel(noise_level=noise0,
                                            noise_level_bounds=(noisemin, noisemax)
                                            )
-        kernel = (kernel_matern + kernel_noise)
+        kernel = (1.*kernel_matern + kernel_noise)
 
         # Fit a GP (optimize the kernel hyperparameters) to each PC.
         self.gps = [
