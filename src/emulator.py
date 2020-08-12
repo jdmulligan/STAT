@@ -72,7 +72,7 @@ class Emulator:
 
     """
 
-    def __init__(self, system, workdir, npc=10, nrestarts=0):
+    def __init__(self, system, workdir, npc=10, nrestarts=0, alpha=0):
         logging.info(
             'training emulator for system %s (%d PC, %d restarts)',
             system, npc, nrestarts
@@ -124,15 +124,22 @@ class Emulator:
         noise0 =  0.49**2
         noisemin = 0.00001**2
         noisemax = 0.5**2
+        
+        noise = -1
+        if noise > 0:
+            noise0 = noise**2
+            noisemin = noise**2 * 0.999
+            noisemax = noise**2 * 1.001
+            
         kernel_noise = kernels.WhiteKernel(noise_level=noise0,
                                            noise_level_bounds=(noisemin, noisemax)
                                            )
-        kernel = (1.*kernel_matern + kernel_noise)
+        kernel = (kernel_matern + kernel_noise)
 
         # Fit a GP (optimize the kernel hyperparameters) to each PC.
         self.gps = [
             GPR(
-                kernel=kernel, alpha=0,
+                kernel=kernel, alpha=alpha,
                 n_restarts_optimizer=nrestarts,
                 copy_X_train=False
             ).fit(design, z)
@@ -176,7 +183,7 @@ class Emulator:
         self._cov_trunc.flat[::nobs + 1] += 1e-4 * self.scaler.var_
 
     @classmethod
-    def from_cache(cls, system, workdir, npc=0, nrestarts=0, retrain=False):
+    def from_cache(cls, system, workdir, npc=0, nrestarts=0, alpha=0, retrain=False):
         """
         Load the emulator for `system` from the cache if available, otherwise
         train and cache a new instance.
@@ -196,7 +203,7 @@ class Emulator:
             emu.__dict__ = joblib.load(cachefile)
             return emu
 
-        emu = cls(system, workdir, npc, nrestarts)
+        emu = cls(system, workdir, npc, nrestarts, alpha)
 
         logging.info('writing cache file %s', cachefile)
         joblib.dump(emu.__dict__, cachefile, protocol=pickle.HIGHEST_PROTOCOL)
@@ -346,7 +353,10 @@ if __name__ == '__main__':
         '--nrestarts', type=int,
         help='number of optimizer restarts'
     )
-
+    parser.add_argument(
+        '--alpha', type=float,
+        help='alpha'
+    )
     parser.add_argument(
         '--retrain', action='store_true',
         help='retrain even if emulator is cached'
@@ -362,7 +372,7 @@ if __name__ == '__main__':
     systems = init0.systems()
     cachedir = init0.cachedir
     for s in systems:
-        emu = Emulator.from_cache(s, args.output_dir, args.npc, args.nrestarts, args.retrain)
+        emu = Emulator.from_cache(s, args.output_dir, args.npc, args.nrestarts, args.alpha, args.retrain)
 
         print(s)
         print('{} PCs explain {:.5f} of variance'.format(

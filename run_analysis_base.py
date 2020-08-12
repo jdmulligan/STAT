@@ -23,10 +23,11 @@ class RunAnalysisBase():
   #---------------------------------------------------------------
   # Constructor
   #---------------------------------------------------------------
-  def __init__(self, config_file, model, output_dir, exclude_index=-1, **kwargs):
+  def __init__(self, config_file, model, alpha, output_dir, exclude_index=-1, **kwargs):
     super(RunAnalysisBase, self).__init__(**kwargs)
     
     self.model = model
+    self.alpha = alpha
     self.output_dir_base = output_dir
     self.exclude_index = exclude_index
     

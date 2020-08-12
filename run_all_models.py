@@ -31,13 +31,14 @@ class RunAllModels():
       config = yaml.safe_load(stream)
       
     self.models = config['models']
+    self.alpha = config['alpha']
 
   #---------------------------------------------------------------
   # Run analysis
   #---------------------------------------------------------------
   def run_all_models(self):
   
-    for model in self.models:
+    for i, model in enumerate(self.models):
     
       # Set path to default.p
       pkl_path = os.path.join(model,'{}/default.p'.format(self.subdir))
@@ -50,13 +51,13 @@ class RunAllModels():
         print('{} does not exist'.format(pkl_path))
         
       # Write a new default.p (must be done before I can call the analysis script...)
-      init = run_analysis_base.RunAnalysisBase(self.config_file, model,
+      init = run_analysis_base.RunAnalysisBase(self.config_file, model, self.alpha[i],
                                                self.output_dir, self.exclude_index)
       init.init_model_type()
       init.initialize()
         
       # Run analysis
-      os.system('python run_analysis.py -c {} -m {} -o {} -i {}'.format(self.config_file, model,
+      os.system('python run_analysis.py -c {} -m {} -a {} -o {} -i {}'.format(self.config_file, model, self.alpha[i],
                                                                         self.output_dir, self.exclude_index))
 
 ##################################################################

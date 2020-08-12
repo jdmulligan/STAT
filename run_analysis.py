@@ -29,10 +29,10 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
   #---------------------------------------------------------------
   # Constructor
   #---------------------------------------------------------------
-  def __init__(self, config_file, model, output_dir, exclude_index, **kwargs):
+  def __init__(self, config_file, model, alpha, output_dir, exclude_index, **kwargs):
   
     # Initialize base class
-    super(RunAnalysis, self).__init__(config_file, model, output_dir, exclude_index, **kwargs)
+    super(RunAnalysis, self).__init__(config_file, model, alpha, output_dir, exclude_index, **kwargs)
     
     # Write dictionary of results to pickle
     self.output_dict = {}
@@ -101,7 +101,8 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
               print('removed {}'.format('{}/{}.pkl'.format(self.cache_dir, system)))
 
       # Re-train emulator
-      os.system('python -m src.emulator --retrain --npc {} --nrestarts {} -o {}'.format(self.n_pc, self.n_restarts, self.workdir))
+      os.system('python -m src.emulator --retrain --npc {} --nrestarts {} --alpha {} -o {}'.format(self.n_pc, self.n_restarts,
+                                                                                                   self.alpha, self.workdir))
     
     # Load trained emulator
     self.EmulatorAuAu200 = emulator.Emulator.from_cache('AuAu200', self.workdir)
@@ -577,6 +578,10 @@ if __name__ == '__main__':
                         type=str, metavar='model',
                         default='LBT',
                         help='model')
+    parser.add_argument('-a', '--alpha', action='store',
+                        type=str, metavar='alpha',
+                        default=0,
+                        help='alpha')
     parser.add_argument('-o', '--outputdir', action='store',
                         type=str, metavar='outputdir',
                         default='./STATGallery')
@@ -596,6 +601,6 @@ if __name__ == '__main__':
       print('File \"{0}\" does not exist! Exiting!'.format(args.configFile))
       sys.exit(0)
 
-    analysis = RunAnalysis(config_file=args.configFile, model=args.model,
+    analysis = RunAnalysis(config_file=args.configFile, model=args.model, alpha=args.alpha,
                            output_dir=args.outputdir, exclude_index=args.excludeIndex)
     analysis.run_model()
