@@ -153,8 +153,9 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     self.plot_RAA(sample_points, 'Posterior')
     
     if not holdout_test and not closure_test:
-        self.plot_qhat()
-    
+        self.plot_qhat(E=100.)
+        self.plot_qhat(T=0.3)
+
     plt.close('all')
     
     # Write result to pkl
@@ -164,8 +165,9 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     
     # Plot qhat/T^3 for the holdout point
     if closure_test:
-      self.plot_closure_test()
-    
+      self.plot_closure_test(E=100.)
+      self.plot_closure_test(T=0.3)
+
     # Write result to pkl
     with open(os.path.join(self.workdir, 'result.pkl'), 'wb') as f:
       pickle.dump(self.output_dict, f)
@@ -175,21 +177,29 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
   #---------------------------------------------------------------
   # Plot qhat/T^3 for the holdout point
   #---------------------------------------------------------------
-  def plot_qhat(self, E=100.):
-  
-    T_array = np.linspace(0.16, 0.5)
+  def plot_qhat(self, E=None, T=None):
   
     # Plot 90% credible interval of qhat solution
     # --> Construct distribution of qhat by sampling each ABCD point
-    qhat_posteriors = [[self.qhat(T=T, E=E, parameters=parameters)
-                        for parameters in self.TransformedSamples]
-                        for T in T_array]
+    if E:
+        xlabel = 'T (GeV)'
+        x_array = np.linspace(0.16, 0.5)
+        qhat_posteriors = [[self.qhat(T=T, E=E, parameters=parameters)
+                            for parameters in self.TransformedSamples]
+                            for T in x_array]
+                        
+    if T:
+        xlabel = 'E (GeV)'
+        x_array = np.linspace(5, 200)
+        qhat_posteriors = [[self.qhat(T=T, E=E, parameters=parameters)
+                            for parameters in self.TransformedSamples]
+                            for E in x_array]
   
-    # Get list of mean qhat values for each T
+    # Get list of mean qhat values for each T or E
     qhat_mean = [np.mean(qhat_values) for qhat_values in qhat_posteriors]
-    plt.plot(T_array, qhat_mean, sns.xkcd_rgb['denim blue'],
+    plt.plot(x_array, qhat_mean, sns.xkcd_rgb['denim blue'],
              linewidth=2., linestyle='--', label='Mean')
-    plt.xlabel('T (GeV)')
+    plt.xlabel(xlabel)
     plt.ylabel(r'$\hat{q}/T^3$')
     
     ymin = 0
@@ -197,13 +207,13 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     axes = plt.gca()
     axes.set_ylim([ymin, ymax])
   
-    # Get credible interval for each T
+    # Get credible interval for each T or E
     # Specifically: highest posterior density interval (HPDI) via pymc3
     confidence = 0.9
     h = [pymc3.stats.hpd(np.array(qhat_values), confidence) for qhat_values in qhat_posteriors]
     credible_low = [i[0] for i in h]
     credible_up =  [i[1] for i in h]
-    plt.fill_between(T_array, credible_low, credible_up, color=sns.xkcd_rgb['light blue'],
+    plt.fill_between(x_array, credible_low, credible_up, color=sns.xkcd_rgb['light blue'],
                      label='{}% Credible Interval'.format(int(confidence*100)))
   
     # Draw legend
@@ -211,21 +221,51 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
                              loc='upper right', fontsize=12)
     ax = plt.gca().add_artist(first_legend)
 
-    plt.savefig('{}/qhat.pdf'.format(self.plot_dir), dpi = 192)
+    if E:
+        label = 'T'
+    if T:
+        label = 'E'
+    plt.savefig('{}/qhat_{}.pdf'.format(self.plot_dir, label), dpi = 192)
     plt.close('all')
  
   #---------------------------------------------------------------
   # Plot qhat/T^3 for the holdout point
   #---------------------------------------------------------------
-  def plot_closure_test(self, E=100.):
-    
-    T_array = np.linspace(0.16, 0.5)
-      
-    # Plot truth value
-    qhat_truth = [self.qhat(T=T, E=E, parameters=self.AllData['holdout_design']) for T in T_array]
-    plt.plot(T_array, qhat_truth, sns.xkcd_rgb['pale red'],
-             linewidth=2., label='Truth')
-    plt.xlabel('T (GeV)')
+  def plot_closure_test(self, E=None, T=None):
+  
+    # Plot 90% credible interval of qhat solution
+    # --> Construct distribution of qhat by sampling each ABCD point
+    if E:
+        xlabel = 'T (GeV)'
+        x_array = np.linspace(0.16, 0.5)
+        
+        # Plot truth value
+        qhat_truth = [self.qhat(T=T, E=E, parameters=self.AllData['holdout_design']) for T in x_array]
+        plt.plot(x_array, qhat_truth, sns.xkcd_rgb['pale red'],
+                 linewidth=2., label='Truth')
+
+        # Plot 90% credible interval of qhat solution
+        # --> Construct distribution of qhat by sampling each ABCD point
+        qhat_posteriors = [[self.qhat(T=T, E=E, parameters=parameters)
+                            for parameters in self.TransformedSamples]
+                            for T in x_array]
+                        
+    if T:
+        xlabel = 'E (GeV)'
+        x_array = np.linspace(5, 200)
+
+        # Plot truth value
+        qhat_truth = [self.qhat(T=T, E=E, parameters=self.AllData['holdout_design']) for E in x_array]
+        plt.plot(x_array, qhat_truth, sns.xkcd_rgb['pale red'],
+                 linewidth=2., label='Truth')
+
+        # Plot 90% credible interval of qhat solution
+        # --> Construct distribution of qhat by sampling each ABCD point
+        qhat_posteriors = [[self.qhat(T=T, E=E, parameters=parameters)
+                            for parameters in self.TransformedSamples]
+                            for E in x_array]
+
+    plt.xlabel(xlabel)
     plt.ylabel(r'$\hat{q}/T^3$')
     
     ymin = 0
@@ -233,15 +273,9 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     axes = plt.gca()
     axes.set_ylim([ymin, ymax])
     
-    # Plot 90% credible interval of qhat solution
-    # --> Construct distribution of qhat by sampling each ABCD point
-    qhat_posteriors = [[self.qhat(T=T, E=E, parameters=parameters)
-                        for parameters in self.TransformedSamples]
-                        for T in T_array]
-    
     # Get list of mean qhat values for each T
     qhat_mean = [np.mean(qhat_values) for qhat_values in qhat_posteriors]
-    plt.plot(T_array, qhat_mean, sns.xkcd_rgb['denim blue'],
+    plt.plot(x_array, qhat_mean, sns.xkcd_rgb['denim blue'],
              linewidth=2., linestyle='--', label='Extracted mean')
              
     # Get credible interval for each T
@@ -250,20 +284,22 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     h = [pymc3.stats.hpd(np.array(qhat_values), confidence) for qhat_values in qhat_posteriors]
     credible_low = [i[0] for i in h]
     credible_up =  [i[1] for i in h]
-    plt.fill_between(T_array, credible_low, credible_up, color=sns.xkcd_rgb['light blue'],
+    plt.fill_between(x_array, credible_low, credible_up, color=sns.xkcd_rgb['light blue'],
                      label='{}% Credible Interval'.format(int(confidence*100)))
                      
     # Store whether truth value is contained within credible region
-    qhat_closure = [((qhat_truth[i] < credible_up[i]) and (qhat_truth[i] > credible_low[i])) for i,T in enumerate(T_array)]
+    qhat_closure = [((qhat_truth[i] < credible_up[i]) and (qhat_truth[i] > credible_low[i])) for i,_ in enumerate(x_array)]
              
     # Draw legend
     first_legend = plt.legend(title=self.model, title_fontsize=15,
                              loc='upper right', fontsize=12)
     ax = plt.gca().add_artist(first_legend)
    
-    # Draw text info
-    
-    plt.savefig('{}/Closure.pdf'.format(self.plot_dir), dpi = 192)
+    if E:
+        label = 'T'
+    if T:
+        label = 'E'
+    plt.savefig('{}/Closure_{}.pdf'.format(self.plot_dir, label), dpi = 192)
     plt.close('all')
     
     # Plot distribution of posterior qhat values for a given T
@@ -274,10 +310,16 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     plt.close('all')
     
     # Write result to pkl
-    self.output_dict['T_array'] = T_array
-    self.output_dict['qhat_truth'] = qhat_truth             # Truth
-    self.output_dict['qhat_mean'] = qhat_mean               # Extracted mean
-    self.output_dict['qhat_closure'] = qhat_closure   # Extracted posteriors
+    if E:
+        self.output_dict['T_array'] = x_array
+        self.output_dict['T_qhat_truth'] = qhat_truth             # Truth
+        self.output_dict['T_qhat_mean'] = qhat_mean               # Extracted mean
+        self.output_dict['T_qhat_closure'] = qhat_closure         # Extracted posteriors
+    if T:
+        self.output_dict['E_array'] = x_array
+        self.output_dict['E_qhat_truth'] = qhat_truth             # Truth
+        self.output_dict['E_qhat_mean'] = qhat_mean               # Extracted mean
+        self.output_dict['E_qhat_closure'] = qhat_closure         # Extracted posteriors
     
   #---------------------------------------------------------------
   # Plot design points
