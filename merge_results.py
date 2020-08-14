@@ -57,7 +57,8 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
         # Store list of closure test result
         T_qhat_closure_result_list = []
         T_qhat_closure_truth_list = []
-        E_qhat_closure_list = []
+        E_qhat_closure_result_list = []
+        E_qhat_closure_truth_list = []
         theta_closure_dict = {}
         for name in self.Names:
             theta_closure_dict[name] = []
@@ -97,7 +98,8 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
                 E_qhat_truth = result_dict['E_qhat_truth']
                 E_qhat_mean = result_dict['E_qhat_mean']
                 E_qhat_closure = result_dict['E_qhat_closure']
-                E_qhat_closure_list.append(E_qhat_closure)
+                E_qhat_closure_result_list.append(E_qhat_closure)
+                E_qhat_closure_truth_list.append(E_qhat_truth)
 
                 # ABCD closure
                 for name in self.Names:
@@ -115,8 +117,8 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
         # Plot summary of closure tests
         self.plot_closure_summary_qhat(T_array, T_qhat_closure_result_list,
                                        T_qhat_closure_truth_list, type='T')
-        #self.plot_closure_summary_qhat(E_array, E_qhat_closure_list, type='E')
-
+        self.plot_closure_summary_qhat(E_array, E_qhat_closure_result_list,
+                                       E_qhat_closure_truth_list, type='E')
 
     #---------------------------------------------------------------
     # Plot summary of closure tests
@@ -149,7 +151,10 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
                 success_list.append(success)
                 
         # Now draw the mean success rate in 2D
-        xbins = np.linspace(0.15, 0.5, num=8)
+        if type is 'T':
+            xbins = np.linspace(0.15, 0.5, num=8)
+        if type is 'E':
+            xbins = np.linspace(5, 200, num=8)
         ybins =  [0, 0.5, 1, 2, 3, 4, 5, 6, 8, 10, 15]
         ybins_center =  [(ybins[i+1]+ybins[i])/2 for i in range(len(ybins)-1)]
 
@@ -168,7 +173,10 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
         fig.colorbar(plot1, ax=ax1)
         
         plt.xlabel('{} (GeV)'.format(type), size=14)
-        plt.ylabel(r'$\left< \hat{q}/T^3 \right>$', size=14)
+        if type is 'T':
+            plt.ylabel(r'$\left< \hat{q}/T^3 \right>_{E=100\;\rm{GeV}}$', size=14)
+        if type is 'E':
+            plt.ylabel(r'$\left< \hat{q}/T^3 \right>_{T=300\;\rm{MeV}}$', size=14)
         plt.title('Fraction of closure tests contained in 90% CR', size=14)
             
         for i in range(len(xbins)-1):
