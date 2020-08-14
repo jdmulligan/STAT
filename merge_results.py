@@ -9,6 +9,7 @@ import seaborn as sns
 import numpy as np
 import pandas as pd
 import scipy
+import statistics
 
 import os
 import sys
@@ -54,7 +55,8 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
         self.avg_residuals = []
 
         # Store list of closure test result
-        T_qhat_closure_list = []
+        T_qhat_closure_result_list = []
+        T_qhat_closure_truth_list = []
         E_qhat_closure_list = []
         theta_closure_dict = {}
         for name in self.Names:
@@ -87,7 +89,8 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
                 T_qhat_truth = result_dict['T_qhat_truth']
                 T_qhat_mean = result_dict['T_qhat_mean']
                 T_qhat_closure = result_dict['T_qhat_closure']
-                T_qhat_closure_list.append(T_qhat_closure)
+                T_qhat_closure_result_list.append(T_qhat_closure)
+                T_qhat_closure_truth_list.append(T_qhat_truth)
                 
                 # qhat vs E
                 E_array = result_dict['E_array']
@@ -110,37 +113,72 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
         self.plot_emulator_validation(true_raa_aggregated, emulator_raa_aggregated)
 
         # Plot summary of closure tests
-        self.plot_closure_summary_qhat(T_array, T_qhat_closure_list, type='T')
-        self.plot_closure_summary_qhat(E_array, E_qhat_closure_list, type='E')
+        self.plot_closure_summary_qhat(T_array, T_qhat_closure_result_list,
+                                       T_qhat_closure_truth_list, type='T')
+        #self.plot_closure_summary_qhat(E_array, E_qhat_closure_list, type='E')
 
 
     #---------------------------------------------------------------
     # Plot summary of closure tests
-    #---------------------------------------------------------------
-    def plot_closure_summary_qhat(self, x_array, qhat_closure_list, type='T'):
+    #
+    # qhat_closure_result_list is a list (per design point) of lists (of T values)
+    # [ [True, True, ...], [True, False,  ...], ... ] where each sublist is a given design point
     
-        # qhat_closure_list is a list (per design point) of lists (of T values)
-        # Generate a new list: average value per T
-        qhat_closure_fraction = [1.*sum([qhat_list[i] for qhat_list in qhat_closure_list])/len(qhat_closure_list) for i,T in enumerate(x_array)]
+    # qhat_closure_truth_list is a list (per design point) of lists (of T values)
+    # [ [qhat_T1, qhat_T2, ...], [qhat_T1, qhat_T2, ...], ... ] where each sublist is a given design point
+    #---------------------------------------------------------------
+    def plot_closure_summary_qhat(self, x_array, qhat_closure_result_list,
+                                  qhat_closure_truth_list, type='T'):
         
-        # Plot fraction of closure tests contained in 90% credible region
-        plt.plot(x_array, qhat_closure_fraction, sns.xkcd_rgb['pale red'],
-                 linewidth=2., label='Fraction of closure tests contained in 90% CR')
-        plt.xlabel('{} (GeV)'.format(type))
-        plt.ylabel('Fraction')
+        # Construct 2D histogram of <qhat of design point> vs T,
+        # where amplitude is fraction of successful closure tests
         
-        ymin = 0.
-        ymax = 1.2
-        axes = plt.gca()
-        axes.set_ylim([ymin, ymax])
+        # For each T and design point, compute <qhat of design point>,
+        # T, and the fraction of successful closure tests
+        x_list = []
+        qhat_mean_list = []
+        success_list = []
+        for i,x in enumerate(x_array):
+            for j,design in enumerate(qhat_closure_result_list):
+            
+                qhat_mean = statistics.mean(qhat_closure_truth_list[j])
+                success = qhat_closure_result_list[j][i]
+                
+                x_list.append(x)
+                qhat_mean_list.append(qhat_mean)
+                success_list.append(success)
+                
+        # Now draw the mean success rate in 2D
+        xbins = np.linspace(0.15, 0.5, num=8)
+        ybins =  [0, 0.5, 1, 2, 3, 4, 5, 6, 8, 10, 15]
+        ybins_center =  [(ybins[i+1]+ybins[i])/2 for i in range(len(ybins)-1)]
+
+        x = np.array(x_list)
+        y = np.array(qhat_mean_list)
+        z = np.array(success_list)
         
-        # Draw legend
-        first_legend = plt.legend(title=self.model, title_fontsize=15,
-                                  loc='upper right', fontsize=12)
-        ax = plt.gca().add_artist(first_legend)
+        H, xedges, yedges, binnumber= scipy.stats.binned_statistic_2d(x, y, z, statistic=np.mean,
+                                                                      bins=[xbins, ybins])
+        H = np.ma.masked_invalid(H) # masking where there was no data
+        XX, YY = np.meshgrid(xedges, yedges)
+
+        fig = plt.figure(figsize = (11,9))
+        ax1=plt.subplot(111)
+        plot1 = ax1.pcolormesh(XX, YY, H.T)
+        fig.colorbar(plot1, ax=ax1)
         
+        plt.xlabel('{} (GeV)'.format(type), size=14)
+        plt.ylabel(r'$\left< \hat{q}/T^3 \right>$', size=14)
+        plt.title('Fraction of closure tests contained in 90% CR', size=14)
+            
+        for i in range(len(xbins)-1):
+            for j in range(len(ybins)-1):
+                zval = H[i][j]
+                ax1.text(xbins[i]+0.025, ybins_center[j], '{:0.2f}'.format(zval), size=8, ha='center', va='center',
+                         bbox=dict(boxstyle='round', facecolor='white', edgecolor='0.3'))
+       
         # Save
-        plt.savefig('{}/Closure_Summary_{}.pdf'.format(self.plot_dir, type), dpi = 192)
+        plt.savefig('{}/Closure_Summary2D_{}.pdf'.format(self.plot_dir, type), dpi = 192)
         plt.close('all')
 
     #---------------------------------------------------------------
