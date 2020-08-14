@@ -54,7 +54,11 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
         self.avg_residuals = []
 
         # Store list of closure test result
-        qhat_closure_list = []
+        T_qhat_closure_list = []
+        E_qhat_closure_list = []
+        theta_closure_dict = {}
+        for name in self.Names:
+            theta_closure_dict[name] = []
     
         n_design_points = len(next(os.walk(self.output_dir_holdout))[1])
         print('iterating through {} results'.format(n_design_points))
@@ -62,6 +66,9 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
         
             # Load pkl file of results
             result_path = os.path.join(self.output_dir_holdout, '{}/result.pkl'.format(i))
+            if not os.path.exists(result_path):
+                print('Warning: {} does not exist'.format(result_path))
+                continue
             with open(result_path, 'rb') as f:
 
                 result_dict = pickle.load(f)
@@ -74,37 +81,55 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
                 [[emulator_raa_aggregated[i].append(raa) for raa in emulator_raa[i]] for i in range(SystemCount)]
                 
                 # Closure test
-                T_array = result_dict['T_array']
-                qhat = result_dict['qhat_truth']
-                mean = result_dict['qhat_mean']
-                qhat_closure = result_dict['qhat_closure']
                 
-                qhat_closure_list.append(qhat_closure)
+                # qhat vs T
+                T_array = result_dict['T_array']
+                T_qhat_truth = result_dict['T_qhat_truth']
+                T_qhat_mean = result_dict['T_qhat_mean']
+                T_qhat_closure = result_dict['T_qhat_closure']
+                T_qhat_closure_list.append(T_qhat_closure)
+                
+                # qhat vs E
+                E_array = result_dict['E_array']
+                E_qhat_truth = result_dict['E_qhat_truth']
+                E_qhat_mean = result_dict['E_qhat_mean']
+                E_qhat_closure = result_dict['E_qhat_closure']
+                E_qhat_closure_list.append(E_qhat_closure)
 
+                # ABCD closure
+                for name in self.Names:
+                    theta_closure_dict[name].append(result_dict['{}_closure'.format(name)])
+
+        # Print theta closure summary
+        for name in self.Names:
+            fraction = 1.*sum(theta_closure_dict[name])/len(theta_closure_dict[name])
+            print('{} closure: {}'.format(name, fraction))
 
         # Plot summary of holdout tests
         #self.plot_avg_residuals()
         self.plot_emulator_validation(true_raa_aggregated, emulator_raa_aggregated)
 
         # Plot summary of closure tests
-        self.plot_closure_summary(T_array, qhat_closure_list)
+        self.plot_closure_summary_qhat(T_array, T_qhat_closure_list, type='T')
+        self.plot_closure_summary_qhat(E_array, E_qhat_closure_list, type='E')
+
 
     #---------------------------------------------------------------
     # Plot summary of closure tests
     #---------------------------------------------------------------
-    def plot_closure_summary(self, T_array, qhat_closure_list):
+    def plot_closure_summary_qhat(self, x_array, qhat_closure_list, type='T'):
     
         # qhat_closure_list is a list (per design point) of lists (of T values)
         # Generate a new list: average value per T
-        qhat_closure_fraction = [1.*sum([qhat_list[i] for qhat_list in qhat_closure_list])/len(qhat_closure_list) for i,T in enumerate(T_array)]
+        qhat_closure_fraction = [1.*sum([qhat_list[i] for qhat_list in qhat_closure_list])/len(qhat_closure_list) for i,T in enumerate(x_array)]
         
         # Plot fraction of closure tests contained in 90% credible region
-        plt.plot(T_array, qhat_closure_fraction, sns.xkcd_rgb['pale red'],
+        plt.plot(x_array, qhat_closure_fraction, sns.xkcd_rgb['pale red'],
                  linewidth=2., label='Fraction of closure tests contained in 90% CR')
-        plt.xlabel('T (GeV)')
+        plt.xlabel('{} (GeV)'.format(type))
         plt.ylabel('Fraction')
         
-        ymin = 0.5
+        ymin = 0.
         ymax = 1.2
         axes = plt.gca()
         axes.set_ylim([ymin, ymax])
@@ -115,7 +140,7 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
         ax = plt.gca().add_artist(first_legend)
         
         # Save
-        plt.savefig('{}/Closure_Summary.pdf'.format(self.plot_dir, self.model), dpi = 192)
+        plt.savefig('{}/Closure_Summary_{}.pdf'.format(self.plot_dir, type), dpi = 192)
         plt.close('all')
 
     #---------------------------------------------------------------

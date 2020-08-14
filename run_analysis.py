@@ -29,10 +29,10 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
   #---------------------------------------------------------------
   # Constructor
   #---------------------------------------------------------------
-  def __init__(self, config_file, model, alpha, output_dir, exclude_index, **kwargs):
+  def __init__(self, config_file, model, output_dir, alpha, exclude_index, **kwargs):
   
     # Initialize base class
-    super(RunAnalysis, self).__init__(config_file, model, alpha, output_dir, exclude_index, **kwargs)
+    super(RunAnalysis, self).__init__(config_file, model, output_dir, alpha, exclude_index, **kwargs)
     
     # Write dictionary of results to pickle
     self.output_dict = {}
@@ -660,6 +660,7 @@ if __name__ == '__main__':
       print('File \"{0}\" does not exist! Exiting!'.format(args.configFile))
       sys.exit(0)
 
-    analysis = RunAnalysis(config_file=args.configFile, model=args.model, alpha=args.alpha,
-                           output_dir=args.outputdir, exclude_index=args.excludeIndex)
+    analysis = RunAnalysis(config_file=args.configFile, model=args.model,
+                           output_dir=args.outputdir, alpha=args.alpha,
+                           exclude_index=args.excludeIndex)
     analysis.run_model()

@@ -51,14 +51,16 @@ class RunAllModels():
         print('{} does not exist'.format(pkl_path))
         
       # Write a new default.p (must be done before I can call the analysis script...)
-      init = run_analysis_base.RunAnalysisBase(self.config_file, model, self.alpha[i],
-                                               self.output_dir, self.exclude_index)
+      init = run_analysis_base.RunAnalysisBase(self.config_file, model, self.output_dir,
+                                               self.alpha[i], self.exclude_index)
       init.init_model_type()
       init.initialize()
         
       # Run analysis
-      os.system('python run_analysis.py -c {} -m {} -a {} -o {} -i {}'.format(self.config_file, model, self.alpha[i],
-                                                                        self.output_dir, self.exclude_index))
+      os.system('python run_analysis.py -c {} -m {} -a {} -o {} -i {}'.format(self.config_file, model,
+                                                                              self.output_dir,
+                                                                              self.alpha[i],
+                                                                              self.exclude_index))
 
 ##################################################################
 if __name__ == '__main__':

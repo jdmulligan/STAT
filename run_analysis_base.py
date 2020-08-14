@@ -23,7 +23,7 @@ class RunAnalysisBase():
   #---------------------------------------------------------------
   # Constructor
   #---------------------------------------------------------------
-  def __init__(self, config_file, model, alpha, output_dir, exclude_index=-1, **kwargs):
+  def __init__(self, config_file, model, output_dir, alpha=0., exclude_index=-1, **kwargs):
     super(RunAnalysisBase, self).__init__(**kwargs)
     
     self.model = model
@@ -129,21 +129,21 @@ class RunAnalysisBase():
     Lambda = 0.2
     C_R = 4./3.
     coeff = 42 * C_R * scipy.special.zeta(3) / np.pi * np.square(4*np.pi/9)
-  
+    Q=E
     if self.model == 'MATTER+LBT1':
       A = parameters[0]
       B = parameters[2]
       C = parameters[1]
       D = parameters[3]
       Q0 = parameters[4]
-      term1 = A * (np.log(E/Lambda) - np.log(B)) / np.square(np.log(E/Lambda))  * np.heaviside(E-Q0, 0.)
+      term1 = A * (np.log(E/Lambda) - np.log(B)) / np.square(np.log(E/Lambda))  * np.heaviside(Q-Q0, 0.)
       term2 = C * (np.log(E/T) - np.log(D)) / np.square(np.log(E*T/(Lambda*Lambda)))
     elif self.model == 'MATTER+LBT2':
       A = parameters[0]
       C = parameters[1]
       D = parameters[2]
       Q0 = parameters[3]
-      term1 = A * (np.log(E/Lambda) - np.log(Q0/Lambda)) / np.square(np.log(E/Lambda)) * np.heaviside(E-Q0, 0.)
+      term1 = A * (np.log(Q/Lambda) - np.log(Q0/Lambda)) / np.square(np.log(Q/Lambda)) * np.heaviside(Q-Q0, 0.)
       term2 = C * (np.log(E/T) - np.log(D)) / np.square(np.log(E*T/(Lambda*Lambda)))
     elif self.model in ['LBT', 'MATTER']:
       A = parameters[0]
