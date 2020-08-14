@@ -17,4 +17,4 @@ n_burn_steps: 1000
 n_steps: 500
 
 # Closure test parameters
-confidence: 0.9
+confidence: [0.9, 0.6]

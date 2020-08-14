@@ -57,7 +57,8 @@ class RunAllModels():
       init.initialize()
         
       # Run analysis
-      os.system('python run_analysis.py -c {} -m {} -a {} -o {} -i {}'.format(self.config_file, model,
+      os.system('python run_analysis.py -c {} -m {} -o {} -a {} -i {}'.format(self.config_file,
+                                                                              model,
                                                                               self.output_dir,
                                                                               self.alpha[i],
                                                                               self.exclude_index))

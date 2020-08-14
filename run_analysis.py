@@ -101,8 +101,7 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
               print('removed {}'.format('{}/{}.pkl'.format(self.cache_dir, system)))
 
       # Re-train emulator
-      os.system('python -m src.emulator --retrain --npc {} --nrestarts {} --alpha {} -o {}'.format(self.n_pc, self.n_restarts,
-                                                                                                   self.alpha, self.workdir))
+      os.system('python -m src.emulator --retrain --npc {} --nrestarts {} --alpha {} -o {}'.format(self.n_pc, self.n_restarts, self.alpha, self.workdir))
     
     # Load trained emulator
     self.EmulatorAuAu200 = emulator.Emulator.from_cache('AuAu200', self.workdir)
@@ -209,11 +208,11 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
   
     # Get credible interval for each T or E
     # Specifically: highest posterior density interval (HPDI) via pymc3
-    h = [pymc3.stats.hpd(np.array(qhat_values), self.confidence) for qhat_values in qhat_posteriors]
+    h = [pymc3.stats.hpd(np.array(qhat_values), self.confidence[0]) for qhat_values in qhat_posteriors]
     credible_low = [i[0] for i in h]
     credible_up =  [i[1] for i in h]
     plt.fill_between(x_array, credible_low, credible_up, color=sns.xkcd_rgb['light blue'],
-                     label='{}% Credible Interval'.format(int(self.confidence*100)))
+                     label='{}% Credible Interval'.format(int(self.confidence[0]*100)))
   
     # Draw legend
     first_legend = plt.legend(title=self.model, title_fontsize=15,
@@ -282,14 +281,20 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
              
     # Get credible interval for each T
     # Specifically: highest posterior density interval (HPDI) via pymc3
-    h = [pymc3.stats.hpd(np.array(qhat_values), self.confidence) for qhat_values in qhat_posteriors]
+    h = [pymc3.stats.hpd(np.array(qhat_values), self.confidence[0]) for qhat_values in qhat_posteriors]
     credible_low = [i[0] for i in h]
     credible_up =  [i[1] for i in h]
     plt.fill_between(x_array, credible_low, credible_up, color=sns.xkcd_rgb['light blue'],
-                     label='{}% Credible Interval'.format(int(self.confidence*100)))
+                     label='{}% Credible Interval'.format(int(self.confidence[0]*100)))
+                     
+    # Store also 60% CR
+    h2 = [pymc3.stats.hpd(np.array(qhat_values), self.confidence[1]) for qhat_values in qhat_posteriors]
+    credible_low2 = [i[0] for i in h2]
+    credible_up2 =  [i[1] for i in h2]
                      
     # Store whether truth value is contained within credible region
     qhat_closure = [((qhat_truth[i] < credible_up[i]) and (qhat_truth[i] > credible_low[i])) for i,_ in enumerate(x_array)]
+    qhat_closure2 = [((qhat_truth[i] < credible_up2[i]) and (qhat_truth[i] > credible_low2[i])) for i,_ in enumerate(x_array)]
              
     # Draw legend
     first_legend = plt.legend(title=self.model, title_fontsize=15,
@@ -316,11 +321,13 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
         self.output_dict['T_qhat_truth'] = qhat_truth             # Truth
         self.output_dict['T_qhat_mean'] = qhat_mean               # Extracted mean
         self.output_dict['T_qhat_closure'] = qhat_closure         # Extracted posteriors
+        self.output_dict['T_qhat_closure2'] = qhat_closure2         # Extracted posteriors
     if T:
         self.output_dict['E_array'] = x_array
         self.output_dict['E_qhat_truth'] = qhat_truth             # Truth
         self.output_dict['E_qhat_mean'] = qhat_mean               # Extracted mean
         self.output_dict['E_qhat_closure'] = qhat_closure         # Extracted posteriors
+        self.output_dict['E_qhat_closure2'] = qhat_closure2         # Extracted posteriors
     
   #---------------------------------------------------------------
   # Plot design points
@@ -561,14 +568,20 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
                 
                 # If holdout test, draw the highest posterior density interval (HPDI)
                 if holdout_test:
-                    credible_interval = pymc3.stats.hpd(np.array(samples[:,i]), self.confidence)
+                    credible_interval = pymc3.stats.hpd(np.array(samples[:,i]), self.confidence[0])
                     ax.fill_between(credible_interval, [ymax,ymax], color=sns.xkcd_rgb['almost black'], alpha=0.1)
                     
                     # Store whether truth value is contained within credible region
                     theta_truth = self.AllData['holdout_design'][i]
                     theta_closure = (theta_truth < credible_interval[1]) and (theta_truth > credible_interval[0])
+                    
+                    credible_interval2 = pymc3.stats.hpd(np.array(samples[:,i]), self.confidence[1])
+                    theta_closure2 = (theta_truth < credible_interval2[1]) and (theta_truth > credible_interval2[0])
+
                     name = self.Names[i]
                     self.output_dict['{}_closure'.format(name)] = theta_closure
+                    self.output_dict['{}_closure2'.format(name)] = theta_closure2
+                    self.output_dict['theta'] = self.AllData['holdout_design']
             
             # Draw 2D correlations
             if i>j:
