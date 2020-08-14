@@ -165,8 +165,8 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     
     # Plot qhat/T^3 for the holdout point
     if closure_test:
-      self.plot_closure_test(E=100.)
-      self.plot_closure_test(T=0.3)
+      self.plot_closure_test_qhat(E=100.)
+      self.plot_closure_test_qhat(T=0.3)
 
     # Write result to pkl
     with open(os.path.join(self.workdir, 'result.pkl'), 'wb') as f:
@@ -209,12 +209,11 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
   
     # Get credible interval for each T or E
     # Specifically: highest posterior density interval (HPDI) via pymc3
-    confidence = 0.9
-    h = [pymc3.stats.hpd(np.array(qhat_values), confidence) for qhat_values in qhat_posteriors]
+    h = [pymc3.stats.hpd(np.array(qhat_values), self.confidence) for qhat_values in qhat_posteriors]
     credible_low = [i[0] for i in h]
     credible_up =  [i[1] for i in h]
     plt.fill_between(x_array, credible_low, credible_up, color=sns.xkcd_rgb['light blue'],
-                     label='{}% Credible Interval'.format(int(confidence*100)))
+                     label='{}% Credible Interval'.format(int(self.confidence*100)))
   
     # Draw legend
     first_legend = plt.legend(title=self.model, title_fontsize=15,
@@ -231,10 +230,12 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
   #---------------------------------------------------------------
   # Plot qhat/T^3 for the holdout point
   #---------------------------------------------------------------
-  def plot_closure_test(self, E=None, T=None):
+  def plot_closure_test_qhat(self, E=None, T=None):
   
     # Plot 90% credible interval of qhat solution
     # --> Construct distribution of qhat by sampling each ABCD point
+    
+    # Plot 1D closure tests for qhat vs. T, for fixed E
     if E:
         xlabel = 'T (GeV)'
         x_array = np.linspace(0.16, 0.5)
@@ -249,7 +250,8 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
         qhat_posteriors = [[self.qhat(T=T, E=E, parameters=parameters)
                             for parameters in self.TransformedSamples]
                             for T in x_array]
-                        
+     
+    # Plot 1D closure tests for qhat vs. E, for fixed T
     if T:
         xlabel = 'E (GeV)'
         x_array = np.linspace(5, 200)
@@ -280,12 +282,11 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
              
     # Get credible interval for each T
     # Specifically: highest posterior density interval (HPDI) via pymc3
-    confidence = 0.9
-    h = [pymc3.stats.hpd(np.array(qhat_values), confidence) for qhat_values in qhat_posteriors]
+    h = [pymc3.stats.hpd(np.array(qhat_values), self.confidence) for qhat_values in qhat_posteriors]
     credible_low = [i[0] for i in h]
     credible_up =  [i[1] for i in h]
     plt.fill_between(x_array, credible_low, credible_up, color=sns.xkcd_rgb['light blue'],
-                     label='{}% Credible Interval'.format(int(confidence*100)))
+                     label='{}% Credible Interval'.format(int(self.confidence*100)))
                      
     # Store whether truth value is contained within credible region
     qhat_closure = [((qhat_truth[i] < credible_up[i]) and (qhat_truth[i] > credible_low[i])) for i,_ in enumerate(x_array)]
@@ -550,10 +551,26 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     for i, row in enumerate(axes):
         for j, ax in enumerate(row):
             if i==j:
+
+                # Draw 1D projection
                 ax.hist(samples[:,i], bins=50,
                         range=self.Ranges[:,i], histtype='step', color=color)
                 ax.set_xlabel(Names[i])
                 ax.set_xlim(*self.Ranges[:,j])
+                ymax = ax.get_ylim()[1]
+                
+                # If holdout test, draw the highest posterior density interval (HPDI)
+                if holdout_test:
+                    credible_interval = pymc3.stats.hpd(np.array(samples[:,i]), self.confidence)
+                    ax.fill_between(credible_interval, [ymax,ymax], color=sns.xkcd_rgb['almost black'], alpha=0.1)
+                    
+                    # Store whether truth value is contained within credible region
+                    theta_truth = self.AllData['holdout_design'][i]
+                    theta_closure = (theta_truth < credible_interval[1]) and (theta_truth > credible_interval[0])
+                    name = self.Names[i]
+                    self.output_dict['{}_closure'.format(name)] = theta_closure
+            
+            # Draw 2D correlations
             if i>j:
                 ax.hist2d(samples[:, j], samples[:, i],
                           bins=50, range=[self.Ranges[:,j], self.Ranges[:,i]],

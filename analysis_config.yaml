@@ -8,10 +8,13 @@ models: ['LBT', 'MATTER', 'MATTER+LBT1', 'MATTER+LBT2']
 retrain_emulator: True
 n_pc: 3
 n_restarts: 50
-alpha: [0.2, 0., 0., 0.]
+alpha: [0.2, 0.2, 0., 0.]
 
 # MCMC parameters
 rerun_mcmc: True
 n_walkers: 500
 n_burn_steps: 1000
 n_steps: 500
+
+# Closure test parameters
+confidence: 0.9

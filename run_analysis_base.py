@@ -69,6 +69,9 @@ class RunAnalysisBase():
     self.n_walkers = config['n_walkers']
     self.n_burn_steps = config['n_burn_steps']
     self.n_steps = config['n_steps']
+    
+    # Closure test parameters
+    self.confidence = config['confidence']
       
   #---------------------------------------------------------------
   # Run analysis
