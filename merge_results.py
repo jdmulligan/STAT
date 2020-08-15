@@ -207,6 +207,12 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
         if type is 'E':
             plt.ylabel(r'$\left< \hat{q}/T^3 \right>_{T=300\;\rm{MeV}}$', size=14)
         plt.title('Fraction of closure tests contained in {}% CR'.format(CR), size=14)
+        
+        mean = np.mean(z)
+        self.N_per_bin = 50 # Here, we take just one point per curve
+        unc = self.binomial_uncertainty(z)
+        ax1.legend(title='mean: {:0.2f}{}{:0.2f}'.format(mean, r'$\pm$', unc),
+                   title_fontsize=14, loc='upper right')
             
         for i in range(len(xbins)-1):
             for j in range(len(ybins)-1):
