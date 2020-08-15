@@ -197,7 +197,8 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
         fig.colorbar(plot1, ax=ax1)
         
         # Histogram of binomial uncertainty
-        Herr, xedges, yedges, binnumber= scipy.stats.binned_statistic_2d(x, y, z, statistic=self.binomial_uncertainty,
+        Herr, xedges, yedges, binnumber= scipy.stats.binned_statistic_2d(x, y, z,
+                                                                         statistic=self.efficiency_uncertainty_bayesian,
                                                                          bins=[xbins, ybins])
         Herr = np.ma.masked_invalid(Herr)
         
@@ -210,7 +211,7 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
         
         mean = np.mean(z)
         self.N_per_bin = 50 # Here, we take just one point per curve
-        unc = self.binomial_uncertainty(z)
+        unc = self.efficiency_uncertainty_bayesian(z)
         ax1.legend(title='mean: {:0.2f}{}{:0.2f}'.format(mean, r'$\pm$', unc),
                    title_fontsize=14, loc='upper right')
             
@@ -230,7 +231,7 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
     # Compute binomial uncertainty from a list of True/False values
     # [True, True, False, True, ...]
     #---------------------------------------------------------------
-    def binomial_uncertainty(self, success_list):
+    def efficiency_uncertainty_binomial(self, success_list):
     
         length = len(success_list)
         sum = np.sum(success_list)
@@ -244,6 +245,26 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
         sigma = np.sqrt(variance)
 
         return sigma/real_length
+        
+    #---------------------------------------------------------------
+    # Compute bayesian uncertainty on efficiency from a list of True/False values
+    # [True, True, False, True, ...]
+    # http://phys.kent.edu/~smargeti/STAR/D0/Ullrich-Errors.pdf
+    #---------------------------------------------------------------
+    def efficiency_uncertainty_bayesian(self, success_list):
+    
+        length = len(success_list)
+        sum = np.sum(success_list)
+        mean = 1.*sum/length
+        
+        # We have multiple T points per bin, which would underestimate the uncertainty
+        # since neighboring points are highly correlated
+        real_length = length / self.N_per_bin
+        
+        k = mean*real_length
+        n = real_length
+        variance = (k+1)*(k+2)/((n+2)*(n+3)) - (k+1)*(k+1)/((n+2)*(n+2))
+        return np.sqrt(variance)
 
     #---------------------------------------------------------------
     # Plot emulator validation
