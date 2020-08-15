@@ -111,18 +111,18 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
                 E_qhat_closure_truth_list.append(E_qhat_truth)
 
                 # ABCD closure
-                #theta_closure_list.append(result_dict['theta'])
-#               for name in self.Names:
-#                   theta_closure_result_dict[name].append(result_dict['{}_closure'.format(name)])
-#                   theta_closure_result2_dict[name].append(result_dict['{}_closure2'.format(name)])
+                theta_closure_list.append(result_dict['theta'])
+                for name in self.Names:
+                    theta_closure_result_dict[name].append(result_dict['{}_closure'.format(name)])
+                    theta_closure_result2_dict[name].append(result_dict['{}_closure2'.format(name)])
 
-#       # Print theta closure summary
-#       for name in self.Names:
-#           fraction = 1.*sum(theta_closure_result_dict[name])/len(theta_closure_result_dict[name])
-#           print('{} closure: {}'.format(name, fraction))
-#
-#           fraction = 1.*sum(theta_closure_result2_dict[name])/len(theta_closure_result2_dict[name])
-#           print('{} closure2: {}'.format(name, fraction))
+        # Print theta closure summary
+        for name in self.Names:
+            fraction = 1.*sum(theta_closure_result_dict[name])/len(theta_closure_result_dict[name])
+            print('{} closure: {}'.format(name, fraction))
+ 
+            fraction = 1.*sum(theta_closure_result2_dict[name])/len(theta_closure_result2_dict[name])
+            print('{} closure2: {}'.format(name, fraction))
 
         # Plot summary of holdout tests
         #self.plot_avg_residuals()
@@ -171,8 +171,13 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
         # Now draw the mean success rate in 2D
         if type is 'T':
             xbins = np.linspace(0.15, 0.5, num=8)
+            xwidth = 0.025
+            self.N_per_bin = 50/7 # We have multiple T points per bin
         if type is 'E':
-            xbins = np.linspace(5, 200, num=8)
+            xbins = np.linspace(20, 200, num=10)
+            xwidth = 10
+            self.N_per_bin = 50/9  # We have multiple E points per bin
+
         ybins =  [0, 0.5, 1, 2, 3, 4, 5, 6, 8, 10, 15]
         ybins_center =  [(ybins[i+1]+ybins[i])/2 for i in range(len(ybins)-1)]
 
@@ -180,6 +185,7 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
         y = np.array(qhat_mean_list)
         z = np.array(success_list)
         
+        # Histogram of fraction of successes
         H, xedges, yedges, binnumber= scipy.stats.binned_statistic_2d(x, y, z, statistic=np.mean,
                                                                       bins=[xbins, ybins])
         H = np.ma.masked_invalid(H) # masking where there was no data
@@ -189,6 +195,11 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
         ax1=plt.subplot(111)
         plot1 = ax1.pcolormesh(XX, YY, H.T)
         fig.colorbar(plot1, ax=ax1)
+        
+        # Histogram of binomial uncertainty
+        Herr, xedges, yedges, binnumber= scipy.stats.binned_statistic_2d(x, y, z, statistic=self.binomial_uncertainty,
+                                                                         bins=[xbins, ybins])
+        Herr = np.ma.masked_invalid(Herr)
         
         plt.xlabel('{} (GeV)'.format(type), size=14)
         if type is 'T':
@@ -200,12 +211,33 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
         for i in range(len(xbins)-1):
             for j in range(len(ybins)-1):
                 zval = H[i][j]
-                ax1.text(xbins[i]+0.025, ybins_center[j], '{:0.2f}'.format(zval), size=8, ha='center', va='center',
+                zerr = Herr[i][j]
+                ax1.text(xbins[i]+xwidth, ybins_center[j], '{:0.2f}{}{:0.2f}'.format(zval, r'$\pm$',zerr),
+                         size=8, ha='center', va='center',
                          bbox=dict(boxstyle='round', facecolor='white', edgecolor='0.3'))
        
         # Save
         plt.savefig('{}/Closure_Summary2D_{}_{}.pdf'.format(self.plot_dir, type, CR), dpi = 192)
         plt.close('all')
+
+    #---------------------------------------------------------------
+    # Compute binomial uncertainty from a list of True/False values
+    # [True, True, False, True, ...]
+    #---------------------------------------------------------------
+    def binomial_uncertainty(self, success_list):
+    
+        length = len(success_list)
+        sum = np.sum(success_list)
+        mean = 1.*sum/length
+        
+        # We have multiple T points per bin, which would underestimate the uncertainty
+        # since neighboring points are highly correlated
+        real_length = length / self.N_per_bin
+        
+        variance = real_length*mean*(1-mean)
+        sigma = np.sqrt(variance)
+
+        return sigma/real_length
 
     #---------------------------------------------------------------
     # Plot emulator validation
