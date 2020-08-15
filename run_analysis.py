@@ -80,6 +80,7 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
           holdout_design_temp[0] = self.holdout_design[0] * self.holdout_design[1]
           holdout_design_temp[1] = self.holdout_design[0] - self.holdout_design[0] * self.holdout_design[1]
           self.holdout_design = holdout_design_temp
+      self.output_dict['theta'] = self.holdout_design
       print('theta: {}'.format(self.AllData['holdout_design']))
       print('theta_transformed: {}'.format(self.holdout_design))
       
@@ -331,13 +332,13 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
         self.output_dict['T_qhat_truth'] = qhat_truth             # Truth
         self.output_dict['T_qhat_mean'] = qhat_mean               # Extracted mean
         self.output_dict['T_qhat_closure'] = qhat_closure         # Extracted posteriors
-        self.output_dict['T_qhat_closure2'] = qhat_closure2         # Extracted posteriors
+        self.output_dict['T_qhat_closure2'] = qhat_closure2       # Extracted posteriors
     if T:
         self.output_dict['E_array'] = x_array
         self.output_dict['E_qhat_truth'] = qhat_truth             # Truth
         self.output_dict['E_qhat_mean'] = qhat_mean               # Extracted mean
         self.output_dict['E_qhat_closure'] = qhat_closure         # Extracted posteriors
-        self.output_dict['E_qhat_closure2'] = qhat_closure2         # Extracted posteriors
+        self.output_dict['E_qhat_closure2'] = qhat_closure2       # Extracted posteriors
     
   #---------------------------------------------------------------
   # Plot design points
@@ -587,7 +588,7 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
                     credible_interval = pymc3.stats.hpd(np.array(samples[:,i]), self.confidence[0])
                     ax.fill_between(credible_interval, [ymax,ymax], color=sns.xkcd_rgb['almost black'], alpha=0.1)
                     
-                    if 'Transformed' in suffix:
+                    if self.model in ['LBT', 'MATTER'] or 'Transformed' in suffix:
                         # Store whether truth value is contained within credible region
                         theta_truth = holdout_design[i]
                         theta_closure = (theta_truth < credible_interval[1]) and (theta_truth > credible_interval[0])
@@ -598,7 +599,6 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
                         name = self.Names[i]
                         self.output_dict['{}_closure'.format(name)] = theta_closure
                         self.output_dict['{}_closure2'.format(name)] = theta_closure2
-                        self.output_dict['theta'] = holdout_design
             
             # Draw 2D correlations
             if i>j:
