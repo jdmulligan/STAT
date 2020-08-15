@@ -56,12 +56,17 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
 
         # Store list of closure test result
         T_qhat_closure_result_list = []
+        T_qhat_closure_result_list2 = []
         T_qhat_closure_truth_list = []
         E_qhat_closure_result_list = []
+        E_qhat_closure_result_list2 = []
         E_qhat_closure_truth_list = []
-        theta_closure_dict = {}
+        theta_closure_list = []
+        theta_closure_result_dict = {}
+        theta_closure_result2_dict = {}
         for name in self.Names:
-            theta_closure_dict[name] = []
+            theta_closure_result_dict[name] = []
+            theta_closure_result2_dict[name] = []
     
         n_design_points = len(next(os.walk(self.output_dir_holdout))[1])
         print('iterating through {} results'.format(n_design_points))
@@ -90,7 +95,9 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
                 T_qhat_truth = result_dict['T_qhat_truth']
                 T_qhat_mean = result_dict['T_qhat_mean']
                 T_qhat_closure = result_dict['T_qhat_closure']
+                T_qhat_closure2 = result_dict['T_qhat_closure2']
                 T_qhat_closure_result_list.append(T_qhat_closure)
+                T_qhat_closure_result_list2.append(T_qhat_closure2)
                 T_qhat_closure_truth_list.append(T_qhat_truth)
                 
                 # qhat vs E
@@ -98,17 +105,24 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
                 E_qhat_truth = result_dict['E_qhat_truth']
                 E_qhat_mean = result_dict['E_qhat_mean']
                 E_qhat_closure = result_dict['E_qhat_closure']
+                E_qhat_closure2 = result_dict['E_qhat_closure2']
                 E_qhat_closure_result_list.append(E_qhat_closure)
+                E_qhat_closure_result_list2.append(E_qhat_closure2)
                 E_qhat_closure_truth_list.append(E_qhat_truth)
 
                 # ABCD closure
-                for name in self.Names:
-                    theta_closure_dict[name].append(result_dict['{}_closure'.format(name)])
+                #theta_closure_list.append(result_dict['theta'])
+#               for name in self.Names:
+#                   theta_closure_result_dict[name].append(result_dict['{}_closure'.format(name)])
+#                   theta_closure_result2_dict[name].append(result_dict['{}_closure2'.format(name)])
 
-        # Print theta closure summary
-        for name in self.Names:
-            fraction = 1.*sum(theta_closure_dict[name])/len(theta_closure_dict[name])
-            print('{} closure: {}'.format(name, fraction))
+#       # Print theta closure summary
+#       for name in self.Names:
+#           fraction = 1.*sum(theta_closure_result_dict[name])/len(theta_closure_result_dict[name])
+#           print('{} closure: {}'.format(name, fraction))
+#
+#           fraction = 1.*sum(theta_closure_result2_dict[name])/len(theta_closure_result2_dict[name])
+#           print('{} closure2: {}'.format(name, fraction))
 
         # Plot summary of holdout tests
         #self.plot_avg_residuals()
@@ -116,9 +130,13 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
 
         # Plot summary of closure tests
         self.plot_closure_summary_qhat(T_array, T_qhat_closure_result_list,
-                                       T_qhat_closure_truth_list, type='T')
+                                       T_qhat_closure_truth_list, type='T', CR='90')
+        self.plot_closure_summary_qhat(T_array, T_qhat_closure_result_list2,
+                                       T_qhat_closure_truth_list, type='T', CR='60')
         self.plot_closure_summary_qhat(E_array, E_qhat_closure_result_list,
-                                       E_qhat_closure_truth_list, type='E')
+                                       E_qhat_closure_truth_list, type='E', CR='90')
+        self.plot_closure_summary_qhat(E_array, E_qhat_closure_result_list2,
+                                       E_qhat_closure_truth_list, type='E', CR='60')
 
     #---------------------------------------------------------------
     # Plot summary of closure tests
@@ -130,7 +148,7 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
     # [ [qhat_T1, qhat_T2, ...], [qhat_T1, qhat_T2, ...], ... ] where each sublist is a given design point
     #---------------------------------------------------------------
     def plot_closure_summary_qhat(self, x_array, qhat_closure_result_list,
-                                  qhat_closure_truth_list, type='T'):
+                                  qhat_closure_truth_list, type='T', CR='90'):
         
         # Construct 2D histogram of <qhat of design point> vs T,
         # where amplitude is fraction of successful closure tests
@@ -177,7 +195,7 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
             plt.ylabel(r'$\left< \hat{q}/T^3 \right>_{E=100\;\rm{GeV}}$', size=14)
         if type is 'E':
             plt.ylabel(r'$\left< \hat{q}/T^3 \right>_{T=300\;\rm{MeV}}$', size=14)
-        plt.title('Fraction of closure tests contained in 90% CR', size=14)
+        plt.title('Fraction of closure tests contained in {}% CR'.format(CR), size=14)
             
         for i in range(len(xbins)-1):
             for j in range(len(ybins)-1):
@@ -186,7 +204,7 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
                          bbox=dict(boxstyle='round', facecolor='white', edgecolor='0.3'))
        
         # Save
-        plt.savefig('{}/Closure_Summary2D_{}.pdf'.format(self.plot_dir, type), dpi = 192)
+        plt.savefig('{}/Closure_Summary2D_{}_{}.pdf'.format(self.plot_dir, type, CR), dpi = 192)
         plt.close('all')
 
     #---------------------------------------------------------------
