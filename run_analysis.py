@@ -72,7 +72,17 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
       # Initialize data structures, with the updated holdout information
       print('Running holdout test {} / {}'.format(self.exclude_index, n_design_points))
       self.initialize(exclude_index = self.exclude_index)
-      print('    {}'.format(self.AllData['holdout_design']))
+      
+      # Transform holdout coordinates
+      self.holdout_design = self.AllData['holdout_design']
+      if self.model in ['MATTER+LBT1', 'MATTER+LBT2']:
+          holdout_design_temp = np.copy(self.holdout_design)
+          holdout_design_temp[0] = self.holdout_design[0] * self.holdout_design[1]
+          holdout_design_temp[1] = self.holdout_design[0] - self.holdout_design[0] * self.holdout_design[1]
+          self.holdout_design = holdout_design_temp
+      print('theta: {}'.format(self.AllData['holdout_design']))
+      print('theta_transformed: {}'.format(self.holdout_design))
+      
       if len(self.AllData['design']) != n_design_points - 1:
         sys.exit('Only {} design points remain, but there should be {}!'.format(
                   len(self.AllData['design']), n_design_points - 1))
@@ -240,7 +250,7 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
         x_array = np.linspace(0.16, 0.5)
         
         # Plot truth value
-        qhat_truth = [self.qhat(T=T, E=E, parameters=self.AllData['holdout_design']) for T in x_array]
+        qhat_truth = [self.qhat(T=T, E=E, parameters=self.holdout_design) for T in x_array]
         plt.plot(x_array, qhat_truth, sns.xkcd_rgb['pale red'],
                  linewidth=2., label='Truth')
 
@@ -256,7 +266,7 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
         x_array = np.linspace(5, 200)
 
         # Plot truth value
-        qhat_truth = [self.qhat(T=T, E=E, parameters=self.AllData['holdout_design']) for E in x_array]
+        qhat_truth = [self.qhat(T=T, E=E, parameters=self.holdout_design) for E in x_array]
         plt.plot(x_array, qhat_truth, sns.xkcd_rgb['pale red'],
                  linewidth=2., label='Truth')
 
@@ -349,20 +359,20 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
         for j, ax in enumerate(row):
             if i==j:
                 ax.hist(transformed_design_points[:,i], bins=50,
-                        range=self.Ranges[:,i], histtype='step', color='green')
+                        range=self.Ranges_transformed[:,i], histtype='step', color='green')
                 ax.set_xlabel(self.Names[i])
-                ax.set_xlim(*self.Ranges[:,j])
+                ax.set_xlim(*self.Ranges_transformed[:,j])
             if i>j:
                 ax.hist2d(transformed_design_points[:, j], transformed_design_points[:, i],
-                          bins=50, range=[self.Ranges[:,j], self.Ranges[:,i]],
+                          bins=50, range=[self.Ranges_transformed[:,j], self.Ranges_transformed[:,i]],
                           cmap='Greens')
                 ax.set_xlabel(self.Names[j])
                 ax.set_ylabel(self.Names[i])
-                ax.set_xlim(*self.Ranges[:,j])
-                ax.set_ylim(*self.Ranges[:,i])
+                ax.set_xlim(*self.Ranges_transformed[:,j])
+                ax.set_ylim(*self.Ranges_transformed[:,i])
                 
                 if holdout_test:
-                  ax.plot(self.AllData['holdout_design'][j], self.AllData['holdout_design'][i], 'ro')
+                  ax.plot(self.holdout_design[j], self.holdout_design[i], 'ro')
 
             if i<j:
                 ax.axis('off')
@@ -547,11 +557,17 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
       samples = self.TransformedSamples
       color = 'blue'
       colormap = 'Blues'
+      ranges = self.Ranges_transformed
+      if holdout_test:
+          holdout_design = self.holdout_design
     else:
       Names = self.Names_untransformed
       samples = self.MCMCSamples
       color = 'green'
       colormap = 'Greens'
+      ranges = self.Ranges
+      if holdout_test:
+          holdout_design = self.AllData['holdout_design']
       
     NDimension = len(self.AllData["labels"])
     figure, axes = plt.subplots(figsize = (3 * NDimension, 3 * NDimension), ncols = NDimension, nrows = NDimension)
@@ -561,9 +577,9 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
 
                 # Draw 1D projection
                 ax.hist(samples[:,i], bins=50,
-                        range=self.Ranges[:,i], histtype='step', color=color)
+                        range=ranges[:,i], histtype='step', color=color)
                 ax.set_xlabel(Names[i])
-                ax.set_xlim(*self.Ranges[:,j])
+                ax.set_xlim(*ranges[:,j])
                 ymax = ax.get_ylim()[1]
                 
                 # If holdout test, draw the highest posterior density interval (HPDI)
@@ -571,30 +587,31 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
                     credible_interval = pymc3.stats.hpd(np.array(samples[:,i]), self.confidence[0])
                     ax.fill_between(credible_interval, [ymax,ymax], color=sns.xkcd_rgb['almost black'], alpha=0.1)
                     
-                    # Store whether truth value is contained within credible region
-                    theta_truth = self.AllData['holdout_design'][i]
-                    theta_closure = (theta_truth < credible_interval[1]) and (theta_truth > credible_interval[0])
-                    
-                    credible_interval2 = pymc3.stats.hpd(np.array(samples[:,i]), self.confidence[1])
-                    theta_closure2 = (theta_truth < credible_interval2[1]) and (theta_truth > credible_interval2[0])
+                    if 'Transformed' in suffix:
+                        # Store whether truth value is contained within credible region
+                        theta_truth = holdout_design[i]
+                        theta_closure = (theta_truth < credible_interval[1]) and (theta_truth > credible_interval[0])
+                        
+                        credible_interval2 = pymc3.stats.hpd(np.array(samples[:,i]), self.confidence[1])
+                        theta_closure2 = (theta_truth < credible_interval2[1]) and (theta_truth > credible_interval2[0])
 
-                    name = self.Names[i]
-                    self.output_dict['{}_closure'.format(name)] = theta_closure
-                    self.output_dict['{}_closure2'.format(name)] = theta_closure2
-                    self.output_dict['theta'] = self.AllData['holdout_design']
+                        name = self.Names[i]
+                        self.output_dict['{}_closure'.format(name)] = theta_closure
+                        self.output_dict['{}_closure2'.format(name)] = theta_closure2
+                        self.output_dict['theta'] = holdout_design
             
             # Draw 2D correlations
             if i>j:
                 ax.hist2d(samples[:, j], samples[:, i],
-                          bins=50, range=[self.Ranges[:,j], self.Ranges[:,i]],
+                          bins=50, range=[ranges[:,j], ranges[:,i]],
                           cmap=colormap)
                 ax.set_xlabel(Names[j])
                 ax.set_ylabel(Names[i])
-                ax.set_xlim(*self.Ranges[:,j])
-                ax.set_ylim(*self.Ranges[:,i])
+                ax.set_xlim(*ranges[:,j])
+                ax.set_ylim(*ranges[:,i])
                 
                 if holdout_test:
-                  ax.plot(self.AllData['holdout_design'][j], self.AllData['holdout_design'][i], 'ro')
+                  ax.plot(holdout_design[j], holdout_design[i], 'ro')
 
             if i<j:
                 ax.axis('off')
@@ -621,17 +638,17 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
         for j, ax in enumerate(row):
             if i==j:
                 ax.hist(transformed_design_points[:,i], bins=50, weights=self.avg_residuals,
-                        range=self.Ranges[:,i], histtype='step', color='blue')
+                        range=self.Ranges_transformed[:,i], histtype='step', color='blue')
                 ax.set_xlabel(self.Names[i])
-                ax.set_xlim(*self.Ranges[:,j])
+                ax.set_xlim(*self.Ranges_transformed[:,j])
             if i>j:
                 ax.hist2d(transformed_design_points[:, j], transformed_design_points[:, i], weights=self.avg_residuals,
-                          bins=50, range=[self.Ranges[:,j], self.Ranges[:,i]],
+                          bins=50, range=[self.Ranges_transformed[:,j], self.Ranges_transformed[:,i]],
                           cmap='Blues')
                 ax.set_xlabel(self.Names[j])
                 ax.set_ylabel(self.Names[i])
-                ax.set_xlim(*self.Ranges[:,j])
-                ax.set_ylim(*self.Ranges[:,i])
+                ax.set_xlim(*self.Ranges_transformed[:,j])
+                ax.set_ylim(*self.Ranges_transformed[:,i])
             if i<j:
                 ax.axis('off')
     plt.savefig('{}/Average_Residuals.pdf'.format(self.plot_dir), dpi = 192)

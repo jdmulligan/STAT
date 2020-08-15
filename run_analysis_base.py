@@ -97,13 +97,19 @@ class RunAnalysisBase():
     # For Matter+LBT 2: (A, C, D, Q), i.e. transformed versions of {A+C, A/(A+C), D, Q} from .dat
     if self.model == 'MATTER':
       self.ranges = [(0, 2), (0, 20), (0, 2), (0, 20)]
+      self.ranges_transformed = self.ranges
     elif self.model == 'LBT':
       self.ranges = [(0, 2), (0, 20), (0, 2), (0, 20)]
+      self.ranges_transformed = self.ranges
     elif self.model == 'MATTER+LBT1':
       self.ranges = [(0, 1.5), (0, 1), (0, 20), (0, 20), (1, 4)]
+      self.ranges_transformed = [(0, 1.5), (0, 1.5), (0, 20), (0, 20), (1, 4)]
     elif self.model == 'MATTER+LBT2':
       self.ranges = [(0, 1.5), (0, 1), (0, 20), (1, 4)]
+      self.ranges_transformed = [(0, 1.5), (0, 1.5), (0, 20), (1, 4)]
+
     self.Ranges = np.array(self.ranges).T
+    self.Ranges_transformed = np.array(self.ranges_transformed).T
       
     if self.model == 'MATTER' or self.model == 'LBT':
       self.Names = [r"$A$", r"$B$", r"$C$", r"$D$"]
