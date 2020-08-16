@@ -67,7 +67,8 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
       # (over all pt, centralities)
       self.SystemCount = len(self.AllData["systems"])
       self.true_raa = [[] for i in range(self.SystemCount)]
-      self.emulator_raa = [[] for i in range(self.SystemCount)]
+      self.emulator_raa_mean = [[] for i in range(self.SystemCount)]
+      self.emulator_raa_stdev = [[] for i in range(self.SystemCount)]
     
       # Initialize data structures, with the updated holdout information
       print('Running holdout test {} / {}'.format(self.exclude_index, n_design_points))
@@ -122,7 +123,6 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     # Construct plots characterizing the emulator
     self.plot_design(holdout_test = holdout_test)
     self.plot_RAA(self.AllData["design"], 'Design')
-    #self.plot_PC_residuals()
     
     if holdout_test:
       self.plot_emulator_RAA_residuals(holdout_test = True)
@@ -171,7 +171,8 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     # Write result to pkl
     if holdout_test:
       self.output_dict['true_raa'] = self.true_raa
-      self.output_dict['emulator_raa'] = self.emulator_raa
+      self.output_dict['emulator_raa_mean'] = self.emulator_raa_mean
+      self.output_dict['emulator_raa_stdev'] = self.emulator_raa_stdev
     
     # Plot qhat/T^3 for the holdout point
     if closure_test:
@@ -425,18 +426,17 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
       Examples = [self.AllData['holdout_design']]
     else:
       Examples = self.AllData['design']
+    Examples = np.array(Examples, copy=False, ndmin=2)
 
     # Get emulator predictions at training points
-    TempPrediction = {"AuAu200": self.EmulatorAuAu200.predict(Examples),
-                     "PbPb2760": self.EmulatorPbPb2760.predict(Examples),
-                     "PbPb5020": self.EmulatorPbPb5020.predict(Examples)}
+    TempPrediction = {"AuAu200": self.EmulatorAuAu200.predict(Examples, return_cov=True),
+                     "PbPb2760": self.EmulatorPbPb2760.predict(Examples, return_cov=True),
+                     "PbPb5020": self.EmulatorPbPb5020.predict(Examples, return_cov=True)}
 
     SystemCount = len(self.AllData["systems"])
     figure, axes = plt.subplots(figsize = (15, 5 * SystemCount), ncols = 2, nrows = SystemCount)
 
     # Loop through system and centrality range
-    sum_chi2 = 0.
-    n = 0
     for s1 in range(0, SystemCount):  # Collision system
         for s2 in range(0, 2): # Centrality range
             axes[s1][s2].set_xlabel(r"$p_{T}$")
@@ -456,30 +456,37 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
               model_y = self.AllData['model'][S1][O][S2]['Y'] # 2d array of model Y-values at each training point
     
             # Get emulator predictions at training points
-            emulator_y = TempPrediction[S1][O][S2] # 2d array of emulator Y-values at each training point
+            mean_prediction, cov_prediction = TempPrediction[S1]
+            
+            # Get interpolation uncertainty
+            cov = cov_prediction[(O,S2),(O,S2)][0]
+            variance = np.diagonal(cov)
+            stdev_prediction = np.sqrt(variance)
     
             # Plot difference between model and emulator
-            for i, y in enumerate(TempPrediction[S1][O][S2]):
+            emulator_y = mean_prediction[O][S2] # 2d array of emulator Y-values at each training point
+            for i, y in enumerate(emulator_y):
     
               if holdout_test:
                 model_y_1d = model_y
-                [self.true_raa[s1].append(raa) for raa in TempPrediction[S1][O][S2][i]]
-                [self.emulator_raa[s1].append(raa) for raa in model_y_1d]
+                [self.true_raa[s1].append(raa) for raa in model_y_1d]
+                [self.emulator_raa_mean[s1].append(raa) for raa in emulator_y[i]]
+                [self.emulator_raa_stdev[s1].append(stdev) for stdev in stdev_prediction]
               else:
                 model_y_1d = model_y[i]
     
-              deltaRAA = (TempPrediction[S1][O][S2][i] - model_y_1d) / model_y_1d
-              for x in np.square(deltaRAA):
-                sum_chi2 += x
-                n += 1
-    
+              deltaRAA = (emulator_y[i] - model_y_1d) / model_y_1d
+              if holdout_test:
+                  deltaRAA_stdev = stdev_prediction[i] / model_y_1d
+
               axes[s1][s2].plot(model_x, deltaRAA, 'b-', alpha=0.1, label="Posterior" if i==0 else '')
+              if holdout_test:
+                axes[s1][s2].fill_between(model_x, -deltaRAA_stdev, deltaRAA_stdev,
+                                          lw=0, color=sns.xkcd_rgb['light blue'], alpha=.3, zorder=20)
 
     figure.savefig('{}/RAA_Residuals_Design.pdf'.format(self.plot_dir), dpi = 192)
     plt.close('all')
     
-    #self.avg_residuals.append(sum_chi2/n)
-
   #---------------------------------------------------------------
   # Plot residuals of each PC
   #---------------------------------------------------------------
