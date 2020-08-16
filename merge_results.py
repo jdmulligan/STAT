@@ -111,24 +111,17 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
                 E_qhat_closure_truth_list.append(E_qhat_truth)
 
                 # ABCD closure
-                theta_closure_list.append(result_dict['theta'])
+                theta = result_dict['theta']
+                theta_closure_list.append(theta)
                 for name in self.Names:
                     theta_closure_result_dict[name].append(result_dict['{}_closure'.format(name)])
                     theta_closure_result2_dict[name].append(result_dict['{}_closure2'.format(name)])
-
-        # Print theta closure summary
-        for name in self.Names:
-            fraction = 1.*sum(theta_closure_result_dict[name])/len(theta_closure_result_dict[name])
-            print('{} closure: {}'.format(name, fraction))
- 
-            fraction = 1.*sum(theta_closure_result2_dict[name])/len(theta_closure_result2_dict[name])
-            print('{} closure2: {}'.format(name, fraction))
 
         # Plot summary of holdout tests
         #self.plot_avg_residuals()
         self.plot_emulator_validation(true_raa_aggregated, emulator_raa_aggregated)
 
-        # Plot summary of closure tests
+        # Plot summary of qhat closure tests
         self.plot_closure_summary_qhat(T_array, T_qhat_closure_result_list,
                                        T_qhat_closure_truth_list, type='T', CR='90')
         self.plot_closure_summary_qhat(T_array, T_qhat_closure_result_list2,
@@ -137,6 +130,80 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
                                        E_qhat_closure_truth_list, type='E', CR='90')
         self.plot_closure_summary_qhat(E_array, E_qhat_closure_result_list2,
                                        E_qhat_closure_truth_list, type='E', CR='60')
+                                       
+        # Print theta closure summary
+        for i,name in enumerate(self.Names):
+            self.plot_closure_summary_theta(i, name, theta_closure_list, theta_closure_result_dict, CR='90')
+            self.plot_closure_summary_theta(i, name, theta_closure_list, theta_closure_result2_dict, CR='60')
+
+    #---------------------------------------------------------------
+    # Plot summary of closure tests
+    #
+    # theta_closure_list is a list (per design point) of theta values
+    #
+    # theta_closure_result_dict is a dictionary (per ABCD) of lists (per design point)
+    # [{A: [True, True, ...]}, {B: [True, False,  ...]}, ... ]
+    #
+    #---------------------------------------------------------------
+    def plot_closure_summary_theta(self, i, name, theta_closure_list, theta_closure_result_dict, CR='90'):
+
+        theta_i_list = [theta[i] for theta in  theta_closure_list]
+        qhat_list = [self.qhat(T=0.3, E=100, parameters=theta) for theta in theta_closure_list]
+        success_list = theta_closure_result_dict[name]
+
+        # Construct 2D histogram of qhat vs theta[i],
+        # where amplitude is fraction of successful closure tests
+
+        theta_i_range = self.ranges_transformed[i]
+        xbins = np.linspace(theta_i_range[0], theta_i_range[1], num=8)
+        xwidth = (theta_i_range[0]+theta_i_range[1])/(7*2)
+
+        ybins =  [0, 0.5, 1, 2, 3, 4, 5, 6, 8, 10, 15]
+        ybins_center =  [(ybins[i+1]+ybins[i])/2 for i in range(len(ybins)-1)]
+
+        x = np.array(theta_i_list)
+        y = np.array(qhat_list)
+        z = np.array(success_list)
+
+        # Histogram of fraction of successes
+        self.N_per_bin = 1
+        H, xedges, yedges, binnumber= scipy.stats.binned_statistic_2d(x, y, z, statistic=np.mean,
+                                                                      bins=[xbins, ybins])
+        XX, YY = np.meshgrid(xedges, yedges)
+
+        fig = plt.figure(figsize = (11,9))
+        ax1=plt.subplot(111)
+        plot1 = ax1.pcolormesh(XX, YY, H.T)
+        fig.colorbar(plot1, ax=ax1)
+
+        # Histogram of efficiency uncertainty
+        Herr, xedges, yedges, binnumber= scipy.stats.binned_statistic_2d(x, y, z,
+                                                                         statistic=self.efficiency_uncertainty_bayesian,
+                                                                         bins=[xbins, ybins])
+
+        plt.xlabel(name, size=14)
+        plt.ylabel(r'$\left< \hat{q}/T^3 \right>_{T=300\;\rm{MeV}, E=100\;\rm{GeV}}$', size=14)
+        plt.title('Fraction of closure tests contained in {}% CR'.format(CR), size=14)
+
+        mean = np.mean(z)
+        self.N_per_bin = 1
+        unc = self.efficiency_uncertainty_bayesian(z)
+        ax1.legend(title='mean: {:0.2f}{}{:0.2f}'.format(mean, r'$\pm$', unc),
+                   title_fontsize=14, loc='upper right')
+            
+        for i in range(len(xbins)-1):
+            for j in range(len(ybins)-1):
+                zval = H[i][j]
+                zerr = Herr[i][j]
+                if np.isnan(zval) or np.isnan(zerr):
+                    continue
+                ax1.text(xbins[i]+xwidth, ybins_center[j], '{:0.2f}{}{:0.2f}'.format(zval, r'$\pm$',zerr),
+                         size=8, ha='center', va='center',
+                         bbox=dict(boxstyle='round', facecolor='white', edgecolor='0.3'))
+
+        # Save
+        plt.savefig('{}/Closure_Summary2D_{}_{}.pdf'.format(self.plot_dir, name, CR), dpi = 192)
+        plt.close('all')
 
     #---------------------------------------------------------------
     # Plot summary of closure tests
@@ -219,6 +286,8 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
             for j in range(len(ybins)-1):
                 zval = H[i][j]
                 zerr = Herr[i][j]
+                if np.isnan(zval) or np.isnan(zerr):
+                    continue
                 ax1.text(xbins[i]+xwidth, ybins_center[j], '{:0.2f}{}{:0.2f}'.format(zval, r'$\pm$',zerr),
                          size=8, ha='center', va='center',
                          bbox=dict(boxstyle='round', facecolor='white', edgecolor='0.3'))
