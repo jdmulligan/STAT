@@ -49,7 +49,8 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
         # Emulator validation: Store lists of true RAA, emulator RAA at each holdout point
         SystemCount = len(self.AllData["systems"])
         true_raa_aggregated = [[] for i in range(SystemCount)]
-        emulator_raa_aggregated = [[] for i in range(SystemCount)]
+        emulator_raa_mean_aggregated = [[] for i in range(SystemCount)]
+        emulator_raa_stdev_aggregated = [[] for i in range(SystemCount)]
 
         # Store a list of the chi2 of the holdout residual
         self.avg_residuals = []
@@ -83,10 +84,13 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
 
                 # Holdout test
                 true_raa = result_dict['true_raa']
-                emulator_raa = result_dict['emulator_raa']
+                emulator_raa_mean = result_dict['emulator_raa_mean']
+                emulator_raa_stdev = result_dict['emulator_raa_stdev']
                 
                 [true_raa_aggregated[i].append(true_raa[i]) for i in range(SystemCount)]
-                [emulator_raa_aggregated[i].append(emulator_raa[i]) for i in range(SystemCount)]
+                [emulator_raa_mean_aggregated[i].append(emulator_raa_mean[i]) for i in range(SystemCount)]
+                [emulator_raa_stdev_aggregated[i].append(emulator_raa_stdev[i]) for i in range(SystemCount)]
+
                 
                 # Closure test
                 
@@ -119,7 +123,7 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
 
         # Plot summary of holdout tests
         #self.plot_avg_residuals()
-        self.plot_emulator_validation(true_raa_aggregated, emulator_raa_aggregated)
+        self.plot_emulator_validation(true_raa_aggregated, emulator_raa_mean_aggregated, emulator_raa_stdev_aggregated)
 
         # Plot summary of qhat closure tests
         self.plot_closure_summary_qhat(T_array, T_qhat_closure_result_list,
@@ -342,7 +346,7 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
     # e.g. true_raa[i] = [[RAA_0, RAA_1,...], [RAA_0, RAA_1, ...], ...]
     #
     #---------------------------------------------------------------
-    def plot_emulator_validation(self, true_raa, emulator_raa):
+    def plot_emulator_validation(self, true_raa, emulator_raa_mean, emulator_raa_stdev):
     
         # Construct a figure with two plots
         plt.figure(1, figsize=(10, 6))
@@ -365,28 +369,30 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
             color = sns.color_palette('colorblind')[i]
             
             # Optionally: Remove outlier points from emulator validation plot
-            if self.model == 'LBT':
-                remove = [79, 124, 135]
-            if self.model == 'MATTER':
-                remove = [59, 60, 61, 62]
-            if self.model == 'MATTER+LBT1':
-                remove = [0, 2, 5, 12, 17, 28, 31, 34, 37, 46, 50, 56, 63, 65, 69]
-            if self.model == 'MATTER+LBT2':
-                remove = [2, 3, 14, 19, 20, 21, 27, 28, 33, 56]
-            #for index in sorted(remove, reverse=True):
-            #    del true_raa[i][index]
-            #    del emulator_raa[i][index]
+            remove_outliers = False
+            if remove_outliers:
+                if self.model == 'LBT':
+                    remove = [79, 124, 135]
+                if self.model == 'MATTER':
+                    remove = [59, 60, 61, 62]
+                if self.model == 'MATTER+LBT1':
+                    remove = [0, 2, 5, 12, 17, 28, 31, 34, 37, 46, 50, 56, 63, 65, 69]
+                if self.model == 'MATTER+LBT2':
+                    remove = [2, 3, 14, 19, 20, 21, 27, 28, 33, 56]
+                for index in sorted(remove, reverse=True):
+                    del true_raa[i][index]
+                    del emulator_raa_mean[i][index]
 
             true_raa_flat_i = [item for sublist in true_raa[i] for item in sublist]
-            emulator_raa_flat_i = [item for sublist in emulator_raa[i] for item in sublist]
+            emulator_raa_mean_flat_i = [item for sublist in emulator_raa_mean[i] for item in sublist]
 
             # Get RAA points
             true_raa_i = np.array(true_raa_flat_i)
-            emulator_raa_i = np.array(emulator_raa_flat_i)
-            normalized_residual_i = np.divide(true_raa_i-emulator_raa_i, true_raa_i)
+            emulator_raa_mean_i = np.array(emulator_raa_mean_flat_i)
+            normalized_residual_i = np.divide(true_raa_i-emulator_raa_mean_i, true_raa_i)
 
             # Draw scatter plot
-            ax_scatter.scatter(true_raa_i, emulator_raa_i, s=1,
+            ax_scatter.scatter(true_raa_i, emulator_raa_mean_i, s=1,
                                color=color, label=system_label)
             ax_scatter.set_xlabel(r'$R_{AA}^{true}$', fontsize=18)
             ax_scatter.set_ylabel(r'$R_{AA}^{emulator}$', fontsize=18)
@@ -402,15 +408,16 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
                                    fontsize=16)
                                    
             # Print out indices of points that deviate significantly
-            stdev = np.std(normalized_residual_i)
-            for j,true_sublist in enumerate(true_raa[i]):
-                emulator_sublist = emulator_raa[i][j]
-                for k,true_raa_value in enumerate(true_sublist):
-                    emulator_raa_value = emulator_sublist[k]
-                    normalized_residual = (true_raa_value-emulator_raa_value)/true_raa_value
-                    if np.abs(normalized_residual) > 3*stdev:
-                        print('Index {} has poor  emulator validation...'.format(j))
-          
+            if remove_outliers:
+                stdev = np.std(normalized_residual_i)
+                for j,true_sublist in enumerate(true_raa[i]):
+                    emulator_sublist = emulator_raa_mean[i][j]
+                    for k,true_raa_value in enumerate(true_sublist):
+                        emulator_raa_value = emulator_sublist[k]
+                        normalized_residual = (true_raa_value-emulator_raa_value)/true_raa_value
+                        if np.abs(normalized_residual) > 3*stdev:
+                            print('Index {} has poor  emulator validation...'.format(j))
+              
         plt.savefig('{}/EmulatorValidation.pdf'.format(self.plot_dir))
         plt.close('all')
 
