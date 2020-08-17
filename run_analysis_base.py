@@ -48,6 +48,8 @@ class RunAnalysisBase():
     # Initialize yaml settings
     self.initialize_config(config_file)
     
+    self.colors = [sns.xkcd_rgb['denim blue'],sns.xkcd_rgb['pale red'],sns.xkcd_rgb['medium green']]
+    
   #---------------------------------------------------------------
   # Initialize config
   #---------------------------------------------------------------

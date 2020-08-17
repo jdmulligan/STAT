@@ -366,7 +366,8 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
                 elif '5020' in system:
                     system_label = 'Pb-Pb 5.02 TeV'
             
-            color = sns.color_palette('colorblind')[i]
+            #color = sns.color_palette('colorblind')[i]
+            color = self.colors[i]
             
             # Optionally: Remove outlier points from emulator validation plot
             remove_outliers = False
@@ -382,29 +383,44 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
                 for index in sorted(remove, reverse=True):
                     del true_raa[i][index]
                     del emulator_raa_mean[i][index]
+                    del emulator_raa_stdev[i][index]
 
             true_raa_flat_i = [item for sublist in true_raa[i] for item in sublist]
             emulator_raa_mean_flat_i = [item for sublist in emulator_raa_mean[i] for item in sublist]
+            emulator_raa_stdev_flat_i = [item for sublist in emulator_raa_stdev[i] for item in sublist]
 
             # Get RAA points
             true_raa_i = np.array(true_raa_flat_i)
             emulator_raa_mean_i = np.array(emulator_raa_mean_flat_i)
-            normalized_residual_i = np.divide(true_raa_i-emulator_raa_mean_i, true_raa_i)
+            emulator_raa_stdev_i = np.array(emulator_raa_stdev_flat_i)
+            normalized_residual_i = np.divide(true_raa_i-emulator_raa_mean_i, emulator_raa_stdev_i)
 
             # Draw scatter plot
-            ax_scatter.scatter(true_raa_i, emulator_raa_mean_i, s=1,
-                               color=color, label=system_label)
+            ax_scatter.scatter(true_raa_i, emulator_raa_mean_i, s=5,
+                               color=color, alpha=0.7, label=system_label, linewidth=0)
+            #ax_scatter.set_ylim([0, 1.19])
+            #ax_scatter.set_xlim([0, 1.19])
             ax_scatter.set_xlabel(r'$R_{AA}^{true}$', fontsize=18)
             ax_scatter.set_ylabel(r'$R_{AA}^{emulator}$', fontsize=18)
-            ax_scatter.legend(title=self.model, title_fontsize=22,
-                              loc='upper left', fontsize=18, markerscale=10)
+            ax_scatter.legend(title=self.model, title_fontsize=18,
+                              loc='upper left', fontsize=16, markerscale=5)
+                              
+            # Draw line with slope 1
+            ax_scatter.plot([0,1], [0,1], sns.xkcd_rgb['almost black'], alpha=0.3,
+                            linewidth=3, linestyle='--')
+            
+            # Print mean value of emulator uncertainty
+            stdev_mean_relative = np.divide(emulator_raa_stdev_i, true_raa_i)
+            stdev_mean = np.mean(stdev_mean_relative)
+            text = r'$\left< \sigma_{{emulator}}^{{\rm{{{}}}}} \right> = {:0.1f}\%$'.format(system_label, 100*stdev_mean)
+            ax_scatter.text(0.7, 0.1-0.05*i, text)
           
             # Draw normalization residuals
-            max = 0.5
-            bins = np.linspace(-max, max)
+            max = 3
+            bins = np.linspace(-max, max, 30)
             ax_residual.hist(normalized_residual_i, color=color, histtype='step',
-                             orientation='horizontal', linewidth=3, density=True, bins=bins)
-            ax_residual.set_ylabel(r'$\left(R_{AA}^{true} - R_{AA}^{emulator}\right) / R_{AA}^{true}$',
+                             orientation='horizontal', linewidth=3, alpha=0.8, density=True, bins=bins)
+            ax_residual.set_ylabel(r'$\left(R_{AA}^{true} - R_{AA}^{emulator}\right) / \sigma_{emulator}$',
                                    fontsize=16)
                                    
             # Print out indices of points that deviate significantly
