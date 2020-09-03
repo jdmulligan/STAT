@@ -64,11 +64,11 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
       
       # For each emulator:
       # Store lists of true RAA, emulator RAA at each holdout point
-      # (over all pt, centralities)
+      # (For each system+centrality -- over all pt)
       self.SystemCount = len(self.AllData["systems"])
-      self.true_raa = [[] for i in range(self.SystemCount)]
-      self.emulator_raa_mean = [[] for i in range(self.SystemCount)]
-      self.emulator_raa_stdev = [[] for i in range(self.SystemCount)]
+      self.true_raa = [[[] for _ in range(0, 2)] for _ in range(self.SystemCount)]
+      self.emulator_raa_mean = [[[] for _ in range(0, 2)] for _ in range(self.SystemCount)]
+      self.emulator_raa_stdev = [[[] for _ in range(0, 2)] for _ in range(self.SystemCount)]
     
       # Initialize data structures, with the updated holdout information
       print('Running holdout test {} / {}'.format(self.exclude_index, n_design_points))
@@ -469,9 +469,9 @@ class RunAnalysis(run_analysis_base.RunAnalysisBase):
     
               if holdout_test:
                 model_y_1d = model_y
-                [self.true_raa[s1].append(raa) for raa in model_y_1d]
-                [self.emulator_raa_mean[s1].append(raa) for raa in emulator_y[i]]
-                [self.emulator_raa_stdev[s1].append(stdev) for stdev in stdev_prediction]
+                [self.true_raa[s1][s2].append(raa) for raa in model_y_1d]
+                [self.emulator_raa_mean[s1][s2].append(raa) for raa in emulator_y[i]]
+                [self.emulator_raa_stdev[s1][s2].append(stdev) for stdev in stdev_prediction]
               else:
                 model_y_1d = model_y[i]
     
