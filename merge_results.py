@@ -412,10 +412,10 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
                                    color=color, alpha=0.7, label=r'$\rm{{{}}}$'.format(system_label), linewidth=0)
                 #ax_scatter.set_ylim([0, 1.19])
                 #ax_scatter.set_xlim([0, 1.19])
-                ax_scatter.set_xlabel(r'$R_{AA}^{true}$', fontsize=18)
-                ax_scatter.set_ylabel(r'$R_{AA}^{emulator}$', fontsize=18)
-                ax_scatter.legend(title=self.model, title_fontsize=18,
-                                  loc='upper left', fontsize=16, markerscale=5)
+                ax_scatter.set_xlabel(r'$R_{\rm{AA}}^{\rm{true}}$', fontsize=18)
+                ax_scatter.set_ylabel(r'$R_{\rm{AA}}^{\rm{emulator}}$', fontsize=18)
+                ax_scatter.legend(title=self.model, title_fontsize=16,
+                                  loc='upper left', fontsize=14, markerscale=5)
                                   
                 # Draw line with slope 1
                 ax_scatter.plot([0,1], [0,1], sns.xkcd_rgb['almost black'], alpha=0.3,
@@ -424,7 +424,7 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
                 # Print mean value of emulator uncertainty
                 stdev_mean_relative = np.divide(emulator_raa_stdev_i, true_raa_i)
                 stdev_mean = np.mean(stdev_mean_relative)
-                text = r'$\left< \sigma_{{emulator}}^{{\rm{{{}}}}} \right> = {:0.1f}\%$'.format(system_label, 100*stdev_mean)
+                text = r'$\left< \sigma_{{\rm{{emulator}}}}^{{\rm{{{}}}}} \right> = {:0.1f}\%$'.format(system_label, 100*stdev_mean)
                 ax_scatter.text(0.65, 0.1-0.05*i, text)
               
                 # Draw normalization residuals
@@ -432,7 +432,7 @@ class MergeResults(run_analysis_base.RunAnalysisBase):
                 bins = np.linspace(-max, max, 30)
                 ax_residual.hist(normalized_residual_i, color=color, histtype='step',
                                  orientation='horizontal', linewidth=3, alpha=0.8, density=True, bins=bins)
-                ax_residual.set_ylabel(r'$\left(R_{AA}^{true} - R_{AA}^{emulator}\right) / \sigma_{emulator}$',
+                ax_residual.set_ylabel(r'$\left(R_{\rm{AA}}^{\rm{true}} - R_{\rm{AA}}^{\rm{emulator}}\right) / \sigma_{\rm{emulator}}$',
                                        fontsize=16)
                                        
                 # Print out indices of points that deviate significantly
